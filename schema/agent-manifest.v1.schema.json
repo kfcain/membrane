@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://membrane.local/schema/agent-manifest.v1.schema.json",
+  "title": "Membrane agent manifest v1",
+  "description": "One manifest describes one agent. Generators build all enforcement configuration from these files. Tier rules are enforced by policy/ci, not by this schema. This schema checks shape only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "membrane/v1" },
+    "kind": { "const": "AgentManifest" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "owner", "description"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$" },
+        "owner": { "type": "string", "format": "email" },
+        "description": { "type": "string", "minLength": 1 },
+        "labels": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tier", "status", "runtime", "model", "delegation", "tools", "egress", "data_scopes", "approval"],
+      "properties": {
+        "tier": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "status": { "enum": ["active", "suspended", "retired"] },
+        "canary": { "type": "boolean", "default": false, "description": "True only for the negative-test agent. The canary must never be allowed an irreversible action." },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "enum": ["k8s", "lambda", "saas"] },
+            "namespace": { "type": "string" },
+            "service_account": { "type": "string" },
+            "image": { "type": "string", "description": "Container image. Policy requires an @sha256 digest for k8s." },
+            "vendor": { "type": "string", "description": "For saas agents: the vendor product name." }
+          }
+        },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider", "id", "pinned"],
+          "properties": {
+            "provider": { "type": "string" },
+            "id": { "type": "string" },
+            "pinned": { "type": "boolean" }
+          }
+        },
+        "delegation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requires_delegator"],
+          "properties": {
+            "requires_delegator": { "type": "boolean", "description": "True means every tool call must name the human the agent acts for." }
+          }
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "scope", "irreversible"],
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z0-9_.-]+$" },
+              "scope": { "type": "string", "pattern": "^[a-z0-9_.-]+:(read|write|admin)$" },
+              "irreversible": { "type": "boolean" },
+              "rate_limit_per_min": { "type": "integer", "minimum": 1 }
+            }
+          }
+        },
+        "egress": { "type": "array", "items": { "type": "string" }, "description": "Allowed destination FQDNs. Policy forbids wildcards at tier 3 and above." },
+        "data_scopes": { "type": "array", "items": { "type": "string" } },
+        "approval": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required_for"],
+          "properties": {
+            "required_for": { "type": "array", "items": { "enum": ["irreversible", "all"] } },
+            "approvers_group": { "type": "string" }
+          }
+        },
+        "evals": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["suite", "min_pass"],
+          "properties": {
+            "suite": { "type": "string" },
+            "min_pass": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "aibom": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["format", "ref"],
+          "properties": {
+            "format": { "enum": ["cyclonedx-1.6", "cyclonedx-1.7", "spdx-3.0"] },
+            "ref": { "type": "string" }
+          }
+        },
+        "sandbox": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["isolated", "standing_credentials", "session_recording"],
+          "properties": {
+            "isolated": { "type": "boolean" },
+            "standing_credentials": { "type": "boolean" },
+            "session_recording": { "type": "boolean" }
+          }
+        },
+        "redteam": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ref", "date"],
+          "properties": {
+            "ref": { "type": "string" },
+            "date": { "type": "string", "format": "date" }
+          }
+        },
+        "promotion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["approvers"],
+          "properties": {
+            "approvers": { "type": "array", "items": { "type": "string", "format": "email" } }
+          }
+        }
+      }
+    }
+  }
+}

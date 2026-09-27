@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://membrane.local/schema/evidence-record.v1.schema.json",
+  "title": "Membrane evidence record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "kind", "source", "mode", "collected_at", "agent_id", "trace_id", "payload", "payload_sha256"],
+  "properties": {
+    "schema": { "const": "membrane.evidence.v1" },
+    "id": { "type": "string", "format": "uuid" },
+    "kind": { "enum": ["decision", "approval", "tool_exec", "canary", "response", "kill_drill", "generation", "inventory", "egress_flow", "secret_scan", "pipeline_run", "check_result"] },
+    "source": { "type": "string", "minLength": 1 },
+    "mode": { "enum": ["live", "simulated", "fixture"] },
+    "collected_at": { "type": "string", "format": "date-time" },
+    "agent_id": { "type": ["string", "null"] },
+    "trace_id": { "type": ["string", "null"], "pattern": "^[0-9a-f]{32}$" },
+    "payload": { "type": "object" },
+    "payload_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}
