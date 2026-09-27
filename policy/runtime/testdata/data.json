@@ -1,0 +1,125 @@
+{
+  "membrane": {
+    "manifests": {
+      "canary": {
+        "approval_required_for": [
+          "all"
+        ],
+        "canary": true,
+        "requires_delegator": true,
+        "sha256": "8560be3e297e969b9cdb433074734d3f7b63a1c114e58efc14e3c870b4489307",
+        "status": "active",
+        "tier": 2,
+        "tools": {
+          "canary.noop": {
+            "irreversible": false,
+            "rate_limit_per_min": 60,
+            "scope": "canary:read"
+          }
+        }
+      },
+      "code-runner": {
+        "approval_required_for": [
+          "irreversible"
+        ],
+        "canary": false,
+        "requires_delegator": true,
+        "sha256": "9d6e3c3e050ecf7a938ac46b2530cf2ca2168085b88c577fe44e11184d82ae16",
+        "status": "active",
+        "tier": 4,
+        "tools": {
+          "sandbox.exec": {
+            "irreversible": false,
+            "rate_limit_per_min": 30,
+            "scope": "sandbox:write"
+          },
+          "warehouse.query": {
+            "irreversible": false,
+            "rate_limit_per_min": 30,
+            "scope": "warehouse:read"
+          },
+          "warehouse.write_table": {
+            "irreversible": true,
+            "rate_limit_per_min": 2,
+            "scope": "warehouse:write"
+          }
+        }
+      },
+      "invoice-reconciler": {
+        "approval_required_for": [
+          "irreversible"
+        ],
+        "canary": false,
+        "requires_delegator": true,
+        "sha256": "4cc66320962fcb4d949a49a77acbdf20cf0506ecfd5d9b9d750b7b60361b3a18",
+        "status": "active",
+        "tier": 3,
+        "tools": {
+          "email.send_vendor_notice": {
+            "irreversible": true,
+            "rate_limit_per_min": 5,
+            "scope": "email:write"
+          },
+          "erp.post_adjustment": {
+            "irreversible": true,
+            "rate_limit_per_min": 5,
+            "scope": "finance:write"
+          },
+          "erp.read_invoices": {
+            "irreversible": false,
+            "rate_limit_per_min": 60,
+            "scope": "finance:read"
+          },
+          "erp.read_purchase_orders": {
+            "irreversible": false,
+            "rate_limit_per_min": 60,
+            "scope": "finance:read"
+          }
+        }
+      },
+      "kb-reader": {
+        "approval_required_for": [],
+        "canary": false,
+        "requires_delegator": true,
+        "sha256": "0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c",
+        "status": "active",
+        "tier": 1,
+        "tools": {
+          "kb.search": {
+            "irreversible": false,
+            "rate_limit_per_min": 60,
+            "scope": "kb:read"
+          }
+        }
+      },
+      "ticket-triager": {
+        "approval_required_for": [
+          "irreversible"
+        ],
+        "canary": false,
+        "requires_delegator": false,
+        "sha256": "32f9fca8379a72e8951d48f25a87924c6ea16e873e44c40e66bf98da02c94d93",
+        "status": "active",
+        "tier": 2,
+        "tools": {
+          "tickets.read": {
+            "irreversible": false,
+            "rate_limit_per_min": 120,
+            "scope": "tickets:read"
+          },
+          "tickets.route": {
+            "irreversible": false,
+            "rate_limit_per_min": 60,
+            "scope": "tickets:write"
+          },
+          "tickets.update_priority": {
+            "irreversible": false,
+            "rate_limit_per_min": 60,
+            "scope": "tickets:write"
+          }
+        }
+      }
+    },
+    "overrides": {}
+  }
+}

@@ -1,0 +1,53 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    name: Required checks
+    runs-on: ubuntu-latest
+    env:
+      MEMBRANE_SCF_ROWS: ${{ github.workspace }}/.beacon-src/beacon/scf/objectives/rows.json
+      OPA_VERSION: v1.4.2
+      CONFTEST_VERSION: 0.59.0
+      KYVERNO_VERSION: v1.14.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out Beacon for the pinned SCF rows
+        uses: actions/checkout@v4
+        with:
+          repository: kfcain/beacon
+          path: .beacon-src
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install OPA, conftest, and Kyverno CLI
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/bin"
+          curl -sSL -o "$HOME/bin/opa" "https://github.com/open-policy-agent/opa/releases/download/${OPA_VERSION}/opa_linux_amd64_static"
+          chmod +x "$HOME/bin/opa"
+          curl -sSL "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz" | tar xz -C "$HOME/bin" conftest
+          curl -sSL "https://github.com/kyverno/kyverno/releases/download/${KYVERNO_VERSION}/kyverno-cli_${KYVERNO_VERSION}_linux_x86_64.tar.gz" | tar xz -C "$HOME/bin" kyverno
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Install membrane
+        run: pip install -e '.[dev]'
+      - name: Validate manifests
+        run: membrane validate
+      - name: Drift check
+        run: membrane gen --check
+      - name: Policy tests
+        run: make test-policy
+      - name: Python tests
+        run: python -m pytest -q
+      - name: End-to-end demo
+        run: scripts/demo.sh
+      - name: Upload assessment output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assessment
+          path: out/assessment/

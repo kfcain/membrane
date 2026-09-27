@@ -1,0 +1,61 @@
+# Deliberately bad manifest. Base: code-runner.
+# expect: sandbox.isolated must be true
+apiVersion: membrane/v1
+kind: AgentManifest
+metadata:
+  id: t4-not-isolated
+  owner: platform-ai@example.com
+  description: Writes and runs data analysis code in an isolated sandbox for analysts.
+spec:
+  tier: 4
+  status: active
+  runtime:
+    type: k8s
+    namespace: agents-sandbox
+    service_account: code-runner
+    image: registry.example.com/agents/code-runner@sha256:4444444444444444444444444444444444444444444444444444444444444444
+  model:
+    provider: bedrock
+    id: anthropic.claude-opus
+    pinned: true
+  delegation:
+    requires_delegator: true
+  tools:
+  - name: sandbox.exec
+    scope: sandbox:write
+    irreversible: false
+    rate_limit_per_min: 30
+  - name: warehouse.query
+    scope: warehouse:read
+    irreversible: false
+    rate_limit_per_min: 30
+  - name: warehouse.write_table
+    scope: warehouse:write
+    irreversible: true
+    rate_limit_per_min: 2
+  egress:
+  - pypi.org
+  - files.pythonhosted.org
+  data_scopes:
+  - warehouse.analytics
+  approval:
+    required_for:
+    - irreversible
+    approvers_group: data-owners
+  evals:
+    suite: code-safety-v1
+    min_pass: 0.98
+  aibom:
+    format: cyclonedx-1.6
+    ref: aibom/code-runner.cdx.json
+  sandbox:
+    isolated: false
+    standing_credentials: false
+    session_recording: true
+  redteam:
+    ref: redteam/code-runner-2026-09.md
+    date: '2026-09-10'
+  promotion:
+    approvers:
+    - security-lead@example.com
+    - data-platform-lead@example.com

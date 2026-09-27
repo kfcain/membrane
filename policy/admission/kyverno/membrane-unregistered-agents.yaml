@@ -1,0 +1,59 @@
+# Deny unregistered agent workloads. A namespace with label
+# membrane.io/agent-namespace: "true" holds agents only. Every Pod and
+# Deployment there must carry the membrane.io/agent-id label, so the
+# membrane-agent-workloads policy applies to it.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: membrane-unregistered-agents
+  annotations:
+    policies.kyverno.io/title: Membrane unregistered agent workloads
+    policies.kyverno.io/category: Membrane
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod, Deployment
+    policies.kyverno.io/description: >-
+      Pods and Deployments in agent namespaces must carry the label
+      membrane.io/agent-id. A workload without it is an unregistered agent.
+    pod-policies.kyverno.io/autogen-controllers: none
+spec:
+  background: false
+  rules:
+    - name: pod-requires-agent-id
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchLabels:
+                  membrane.io/agent-namespace: "true"
+      validate:
+        failureAction: Enforce
+        message: >-
+          Namespace {{ request.namespace }} is an agent namespace. Pods here need label
+          membrane.io/agent-id from a registered manifest.
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.metadata.labels.\"membrane.io/agent-id\" || '' }}"
+                operator: Equals
+                value: ""
+
+    - name: deployment-requires-agent-id
+      match:
+        any:
+          - resources:
+              kinds: [Deployment]
+              namespaceSelector:
+                matchLabels:
+                  membrane.io/agent-namespace: "true"
+      validate:
+        failureAction: Enforce
+        message: >-
+          Namespace {{ request.namespace }} is an agent namespace. Deployments here need pod
+          template label membrane.io/agent-id from a registered manifest.
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.spec.template.metadata.labels.\"membrane.io/agent-id\" || '' }}"
+                operator: Equals
+                value: ""

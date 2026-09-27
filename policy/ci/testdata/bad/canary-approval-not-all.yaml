@@ -1,0 +1,39 @@
+# Deliberately bad manifest. Base: canary.
+# expect: canary approval.required_for must contain all
+apiVersion: membrane/v1
+kind: AgentManifest
+metadata:
+  id: canary-approval-not-all
+  owner: security-eng@example.com
+  description: Negative-test agent. It tries forbidden actions on a schedule. Every attempt must be denied.
+spec:
+  tier: 2
+  status: active
+  canary: true
+  runtime:
+    type: k8s
+    namespace: membrane-system
+    service_account: canary
+    image: registry.example.com/membrane/canary@sha256:5555555555555555555555555555555555555555555555555555555555555555
+  model:
+    provider: none
+    id: none
+    pinned: true
+  delegation:
+    requires_delegator: true
+  tools:
+  - name: canary.noop
+    scope: canary:read
+    irreversible: false
+    rate_limit_per_min: 60
+  egress: []
+  data_scopes: []
+  approval:
+    required_for:
+    - irreversible
+  evals:
+    suite: none
+    min_pass: 1.0
+  aibom:
+    format: cyclonedx-1.6
+    ref: aibom/canary.cdx.json

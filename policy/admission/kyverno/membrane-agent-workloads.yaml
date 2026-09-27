@@ -1,0 +1,311 @@
+# Admission gate for agent workloads. It applies to Pods and Deployments that
+# carry the label membrane.io/agent-id.
+#
+# Autogen is off. The Deployment rules are explicit, so the rule list shows
+# exactly what Kyverno enforces. Rules select agent workloads with
+# preconditions on the agent-id label, not with a match selector. A
+# precondition miss is a real "skip" result, so `kyverno test` can assert it.
+# A match selector miss is "excluded", and the CLI passes any expectation for it.
+#
+# Enforcement uses the rule-level validate.failureAction field. Kyverno 1.13
+# and later deprecate spec.validationFailureAction.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: membrane-agent-workloads
+  annotations:
+    policies.kyverno.io/title: Membrane agent workloads
+    policies.kyverno.io/category: Membrane
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod, Deployment
+    policies.kyverno.io/description: >-
+      An agent workload must name its manifest hash and tier, pin every image
+      by digest, use a dedicated service account, and match the registry.
+      Tier 3 and tier 4 agents must not mount a service account token.
+    pod-policies.kyverno.io/autogen-controllers: none
+spec:
+  background: false
+  rules:
+    # ------------------------------------------------------------------ Pod
+    - name: pod-manifest-sha256
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      preconditions:
+        all:
+          - key: "{{ request.object.metadata.labels.\"membrane.io/agent-id\" || '' }}"
+            operator: NotEquals
+            value: ""
+      validate:
+        failureAction: Enforce
+        message: >-
+          Agent pods need annotation membrane.io/manifest-sha256 with 64 lowercase hex characters.
+        deny:
+          conditions:
+            any:
+              - key: "{{ regex_match('^[a-f0-9]{64}$', request.object.metadata.annotations.\"membrane.io/manifest-sha256\" || '') }}"
+                operator: Equals
+                value: false
+
+    - name: pod-tier-label
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      preconditions:
+        all:
+          - key: "{{ request.object.metadata.labels.\"membrane.io/agent-id\" || '' }}"
+            operator: NotEquals
+            value: ""
+      validate:
+        failureAction: Enforce
+        message: Agent pods need label membrane.io/tier with a value from 1 to 4.
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.metadata.labels.\"membrane.io/tier\" || '' }}"
+                operator: AnyNotIn
+                value: ["1", "2", "3", "4"]
+
+    - name: pod-image-digest
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      preconditions:
+        all:
+          - key: "{{ request.object.metadata.labels.\"membrane.io/agent-id\" || '' }}"
+            operator: NotEquals
+            value: ""
+      validate:
+        failureAction: Enforce
+        message: Every container image in an agent pod must be pinned by @sha256 digest (64 hex).
+        foreach:
+          - list: "request.object.spec.[ephemeralContainers, initContainers, containers][]"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ regex_match('@sha256:[a-f0-9]{64}$', element.image || '') }}"
+                    operator: Equals
+                    value: false
+
+    - name: pod-service-account
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      preconditions:
+        all:
+          - key: "{{ request.object.metadata.labels.\"membrane.io/agent-id\" || '' }}"
+            operator: NotEquals
+            value: ""
+      validate:
+        failureAction: Enforce
+        message: Agent pods must set serviceAccountName to a dedicated account, not empty and not default.
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.spec.serviceAccountName || '' }}"
+                operator: AnyIn
+                value: ["", "default"]
+
+    - name: pod-no-token-automount-tier3
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      preconditions:
+        all:
+          - key: "{{ request.object.metadata.labels.\"membrane.io/agent-id\" || '' }}"
+            operator: NotEquals
+            value: ""
+          - key: "{{ request.object.metadata.labels.\"membrane.io/tier\" || '' }}"
+            operator: AnyIn
+            value: ["3", "4"]
+      validate:
+        failureAction: Enforce
+        message: Tier 3 and tier 4 agent pods must set automountServiceAccountToken to false.
+        deny:
+          conditions:
+            any:
+              - key: "{{ to_string(request.object.spec.automountServiceAccountToken) }}"
+                operator: NotEquals
+                value: "false"
+
+    - name: pod-registered
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      preconditions:
+        all:
+          - key: "{{ request.object.metadata.labels.\"membrane.io/agent-id\" || '' }}"
+            operator: NotEquals
+            value: ""
+      context:
+        - name: registry
+          configMap:
+            name: membrane-registry
+            namespace: membrane-system
+        - name: registeredsha
+          variable:
+            jmesPath: "lookup(registry.data || `{}`, request.object.metadata.labels.\"membrane.io/agent-id\") || ''"
+      validate:
+        failureAction: Enforce
+        message: >-
+          Agent {{ request.object.metadata.labels."membrane.io/agent-id" }} is not in the
+          membrane-registry ConfigMap, or its membrane.io/manifest-sha256 annotation does not
+          match the registered manifest hash.
+        deny:
+          conditions:
+            any:
+              - key: "{{ registeredsha }}"
+                operator: Equals
+                value: ""
+              - key: "{{ registeredsha }}"
+                operator: NotEquals
+                value: "{{ request.object.metadata.annotations.\"membrane.io/manifest-sha256\" || '' }}"
+
+    # ----------------------------------------------------------- Deployment
+    # A Deployment is an agent workload when its pod template carries the
+    # agent-id label. The checks apply to the pod template.
+    - name: deployment-manifest-sha256
+      match:
+        any:
+          - resources:
+              kinds: [Deployment]
+      preconditions:
+        all:
+          - key: "{{ request.object.spec.template.metadata.labels.\"membrane.io/agent-id\" || '' }}"
+            operator: NotEquals
+            value: ""
+      validate:
+        failureAction: Enforce
+        message: >-
+          Agent Deployments need pod template annotation membrane.io/manifest-sha256 with 64 lowercase hex characters.
+        deny:
+          conditions:
+            any:
+              - key: "{{ regex_match('^[a-f0-9]{64}$', request.object.spec.template.metadata.annotations.\"membrane.io/manifest-sha256\" || '') }}"
+                operator: Equals
+                value: false
+
+    - name: deployment-tier-label
+      match:
+        any:
+          - resources:
+              kinds: [Deployment]
+      preconditions:
+        all:
+          - key: "{{ request.object.spec.template.metadata.labels.\"membrane.io/agent-id\" || '' }}"
+            operator: NotEquals
+            value: ""
+      validate:
+        failureAction: Enforce
+        message: Agent Deployments need pod template label membrane.io/tier with a value from 1 to 4.
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.spec.template.metadata.labels.\"membrane.io/tier\" || '' }}"
+                operator: AnyNotIn
+                value: ["1", "2", "3", "4"]
+
+    - name: deployment-image-digest
+      match:
+        any:
+          - resources:
+              kinds: [Deployment]
+      preconditions:
+        all:
+          - key: "{{ request.object.spec.template.metadata.labels.\"membrane.io/agent-id\" || '' }}"
+            operator: NotEquals
+            value: ""
+      validate:
+        failureAction: Enforce
+        message: Every container image in an agent Deployment must be pinned by @sha256 digest (64 hex).
+        foreach:
+          - list: "request.object.spec.template.spec.[initContainers, containers][]"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ regex_match('@sha256:[a-f0-9]{64}$', element.image || '') }}"
+                    operator: Equals
+                    value: false
+
+    - name: deployment-service-account
+      match:
+        any:
+          - resources:
+              kinds: [Deployment]
+      preconditions:
+        all:
+          - key: "{{ request.object.spec.template.metadata.labels.\"membrane.io/agent-id\" || '' }}"
+            operator: NotEquals
+            value: ""
+      validate:
+        failureAction: Enforce
+        message: Agent Deployments must set serviceAccountName to a dedicated account, not empty and not default.
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.spec.template.spec.serviceAccountName || '' }}"
+                operator: AnyIn
+                value: ["", "default"]
+
+    - name: deployment-no-token-automount-tier3
+      match:
+        any:
+          - resources:
+              kinds: [Deployment]
+      preconditions:
+        all:
+          - key: "{{ request.object.spec.template.metadata.labels.\"membrane.io/agent-id\" || '' }}"
+            operator: NotEquals
+            value: ""
+          - key: "{{ request.object.spec.template.metadata.labels.\"membrane.io/tier\" || '' }}"
+            operator: AnyIn
+            value: ["3", "4"]
+      validate:
+        failureAction: Enforce
+        message: Tier 3 and tier 4 agent Deployments must set automountServiceAccountToken to false in the pod template.
+        deny:
+          conditions:
+            any:
+              - key: "{{ to_string(request.object.spec.template.spec.automountServiceAccountToken) }}"
+                operator: NotEquals
+                value: "false"
+
+    - name: deployment-registered
+      match:
+        any:
+          - resources:
+              kinds: [Deployment]
+      preconditions:
+        all:
+          - key: "{{ request.object.spec.template.metadata.labels.\"membrane.io/agent-id\" || '' }}"
+            operator: NotEquals
+            value: ""
+      context:
+        - name: registry
+          configMap:
+            name: membrane-registry
+            namespace: membrane-system
+        - name: registeredsha
+          variable:
+            jmesPath: "lookup(registry.data || `{}`, request.object.spec.template.metadata.labels.\"membrane.io/agent-id\") || ''"
+      validate:
+        failureAction: Enforce
+        message: >-
+          Agent {{ request.object.spec.template.metadata.labels."membrane.io/agent-id" }} is not in the
+          membrane-registry ConfigMap, or its membrane.io/manifest-sha256 annotation does not
+          match the registered manifest hash.
+        deny:
+          conditions:
+            any:
+              - key: "{{ registeredsha }}"
+                operator: Equals
+                value: ""
+              - key: "{{ registeredsha }}"
+                operator: NotEquals
+                value: "{{ request.object.spec.template.metadata.annotations.\"membrane.io/manifest-sha256\" || '' }}"

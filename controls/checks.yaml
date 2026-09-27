@@ -1,0 +1,191 @@
+# Membrane check catalog. Contract: docs/CONTRACTS.md section 7.
+#
+# Each check turns evidence records into one status word:
+# PASS, FAIL, NO_EVIDENCE, STALE, or INELIGIBLE.
+#
+# evidence_kinds: every kind listed must have records, or the check is NO_EVIDENCE.
+#   Freshness (max_age_hours) applies to the newest eligible record of each kind.
+# supporting_kinds: optional. The check joins these kinds when they exist.
+#   An empty supporting kind does not make the check NO_EVIDENCE.
+#
+# controls.nist_800_53: NIST SP 800-53 Rev 5 control ids.
+# controls.scf_ao: SCF 2026.3 assessment objective ids. Every id must exist in
+#   Beacon's pinned rows.json. docs/CONTROLS.md quotes each statement.
+#   An empty list means no row fits. Do not invent ids.
+#
+# ISO/IEC 42001 Annex A ids are omitted. The standard text is not public,
+# and this catalog does not cite ids that it cannot check against the source.
+
+version: 1
+scf_pin:
+  catalog_version: "2026.3"
+  source_sheet: "Assessment Objectives 2026.3"
+  workbook_sha256: 5a89bf2d3c106a9a87d4b6e3d62dd3e147d0e960d4c07473045a10aa8a7df697
+  rows_json_sha256: 85bd32502899ff908bb55fee3b1c79f56864565702446bb77fbaf10875725162
+
+checks:
+  - id: AGT-INV-01
+    title: No unregistered agent workloads
+    question: Does every running agent workload have an entry in the agent registry?
+    evidence_kinds: [inventory]
+    supporting_kinds: []
+    max_age_hours: 24
+    target: >-
+      Zero workloads carry a membrane.io/agent-id label with an id that is not in the registry.
+      Zero workloads in an agent namespace have no membrane.io/agent-id label.
+      Membrane infrastructure workloads carry the label membrane.io/component and are exempt.
+      The newest inventory record of each cluster is the population.
+    remediation: >-
+      Register each listed workload with a manifest in registry/agents, or remove the workload from the cluster.
+    controls:
+      nist_800_53: [CM-8, CM-8(3)]
+      scf_ao: [AAT-07.1_A02, AST-09_A04]
+
+  - id: AGT-INV-02
+    title: No manifest drift on running agents
+    question: Does each running agent carry the manifest hash that the registry holds for it?
+    evidence_kinds: [inventory]
+    supporting_kinds: []
+    max_age_hours: 24
+    target: >-
+      Zero registered agent workloads have a membrane.io/manifest-sha256 annotation that is missing
+      or that differs from the registry hash of that agent.
+    remediation: >-
+      Redeploy the listed workload from the current registered manifest through the pipeline, or roll back the out-of-band change.
+    controls:
+      nist_800_53: [CM-2, CM-3]
+      scf_ao: [CFG-08.2_A07, AAT-07.1_A03]
+
+  - id: AGT-IAM-01
+    title: No model-provider credentials outside the vault
+    question: Are all model-provider credentials that the scanner found stored in the vault only?
+    evidence_kinds: [secret_scan]
+    supporting_kinds: []
+    max_age_hours: 24
+    target: >-
+      The newest secret scan has zero findings with in_vault false.
+    remediation: >-
+      Revoke the listed credential at the provider, issue a new one into the vault, and remove the copy from the listed location.
+    controls:
+      nist_800_53: [IA-5, IA-5(7)]
+      scf_ao: [IAC-14.3_A01, CFG-17.2_A04]
+
+  - id: AGT-IAM-02
+    title: One identity per agent
+    question: Does each agent run under a service account and SPIFFE id that no other agent uses?
+    evidence_kinds: [inventory]
+    supporting_kinds: []
+    max_age_hours: 24
+    target: >-
+      Zero service accounts (namespace and name) and zero SPIFFE ids are used by more than one distinct agent id
+      in the newest inventory of each cluster.
+    remediation: >-
+      Give each listed agent its own service account and SPIFFE id, and update the manifest runtime block to match.
+    controls:
+      nist_800_53: [IA-4, IA-9]
+      scf_ao: [IAC-36_A02, AAT-39.19_A01]
+
+  - id: AGT-AU-01
+    title: Every tool execution has an allow decision
+    question: Does every tool execution trace back to an allow decision from the gateway?
+    evidence_kinds: [tool_exec]
+    supporting_kinds: [decision]
+    max_age_hours: 24
+    target: >-
+      Zero tool_exec records in the window have a decision_id with no matching decision record,
+      a matching decision that is not allow, or a matching decision for another agent, tool, or action hash.
+    remediation: >-
+      Route the listed tool backend through the gateway so that it runs only after an allow decision, and investigate each listed execution.
+    controls:
+      nist_800_53: [AU-2, AU-12, AC-3]
+      scf_ao: [AAT-39.3_A03, AAT-40.1_A01]
+
+  - id: AGT-AC-01
+    title: Irreversible actions have a bound approval
+    question: Does every executed irreversible action have a human approval bound to the same action hash?
+    evidence_kinds: [tool_exec]
+    supporting_kinds: [approval]
+    max_age_hours: 24
+    target: >-
+      Zero irreversible tool_exec records in the window lack an approval record with the same approval_id
+      and the same action_sha256 that did not expire before the execution time.
+    remediation: >-
+      Block irreversible tools in the gateway until a verified approval token for the exact action hash is present, and review each listed execution with its owner.
+    controls:
+      nist_800_53: [AC-3, AC-3(2)]
+      scf_ao: [AAT-36.12_A01, AAT-36.12_A02, AAT-39_A03]
+
+  - id: AGT-AC-02
+    title: Delegator present where the manifest requires one
+    question: Does every allow decision name a human delegator when the agent manifest requires one?
+    evidence_kinds: [decision]
+    supporting_kinds: []
+    max_age_hours: 24
+    target: >-
+      Zero allow decisions in the window have an empty delegator for an agent whose manifest sets
+      delegation.requires_delegator true.
+    remediation: >-
+      Fix the authorization policy so that it denies calls with no delegator for these agents, and fix the caller so that it sends the delegator.
+    controls:
+      nist_800_53: [AC-3, IA-2]
+      scf_ao: [IAC-32_A03, AAT-39.19_A01]
+
+  - id: AGT-SC-01
+    title: Egress stays inside the manifest list
+    question: Do agents reach only the destinations that their manifest egress list names?
+    evidence_kinds: [egress_flow]
+    supporting_kinds: []
+    max_age_hours: 24
+    target: >-
+      Zero allowed flows in the window go from an agent to a destination FQDN that is not in the egress list
+      of that agent manifest. A flow from an unregistered agent id is also a finding.
+    remediation: >-
+      Regenerate the egress network policy from the manifest and apply it, then investigate the listed flows.
+    controls:
+      nist_800_53: [SC-7, SC-7(5), AC-4]
+      scf_ao: [AAT-39.2_A02, AAT-39.11_A02, NET-04_A03]
+
+  - id: AGT-CM-01
+    title: Deploys pass every gate
+    question: Did every agent deploy in the window pass every pipeline gate and meet the manifest eval threshold?
+    evidence_kinds: [pipeline_run]
+    supporting_kinds: []
+    max_age_hours: 720
+    target: >-
+      Zero deployed pipeline runs in the window have manifest_policy other than pass, aibom other than present,
+      or signature other than verified. When the manifest defines evals, the evals gate result is pass
+      and the score is at or above the manifest min_pass.
+    remediation: >-
+      Make the listed gate blocking in the pipeline, then rerun the deploy so that every gate runs and passes.
+    controls:
+      nist_800_53: [CM-3, CM-3(2), SA-11]
+      scf_ao: [CHG-07_A01, AAT-28.5_A01, AAT-28.10_A02]
+
+  - id: AGT-TST-01
+    title: Canary probes pass daily
+    question: Did a canary run in the last 24 hours and did every probe pass?
+    evidence_kinds: [canary]
+    supporting_kinds: []
+    max_age_hours: 24
+    target: >-
+      The newest canary record is at most 24 hours old, all_pass is true, and every probe has pass true.
+    remediation: >-
+      Fix the policy or gateway path that let the listed probe through, then rerun the canary.
+    controls:
+      nist_800_53: [CA-7, SI-6]
+      scf_ao: [AAT-39.14_A01, CPL-07_A06]
+
+  - id: AGT-IR-01
+    title: Kill drill inside 90 days and inside SLA
+    question: Did a kill drill run in the last 90 days and did full denial occur within the SLA?
+    evidence_kinds: [kill_drill]
+    supporting_kinds: []
+    max_age_hours: 2160
+    target: >-
+      The newest kill drill record is at most 90 days old, within_sla is true, and seconds_to_denial
+      is at or below sla_seconds.
+    remediation: >-
+      Find the slow step in the kill path, fix it, and run the kill drill again.
+    controls:
+      nist_800_53: [IR-3, IR-4]
+      scf_ao: [AAT-39.13_A01, IRO-09_A04]

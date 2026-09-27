@@ -1,0 +1,479 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: membrane-admission
+policies:
+- ../membrane-agent-workloads.yaml
+- ../membrane-unregistered-agents.yaml
+resources:
+- resources.yaml
+variables: values.yaml
+results:
+- policy: membrane-agent-workloads
+  rule: pod-manifest-sha256
+  kind: Pod
+  resources:
+  - good-kb-reader
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-tier-label
+  kind: Pod
+  resources:
+  - good-kb-reader
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-image-digest
+  kind: Pod
+  resources:
+  - good-kb-reader
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-service-account
+  kind: Pod
+  resources:
+  - good-kb-reader
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-registered
+  kind: Pod
+  resources:
+  - good-kb-reader
+  result: pass
+- policy: membrane-unregistered-agents
+  rule: pod-requires-agent-id
+  kind: Pod
+  resources:
+  - good-kb-reader
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-manifest-sha256
+  kind: Pod
+  resources:
+  - good-invoice-reconciler
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-tier-label
+  kind: Pod
+  resources:
+  - good-invoice-reconciler
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-image-digest
+  kind: Pod
+  resources:
+  - good-invoice-reconciler
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-service-account
+  kind: Pod
+  resources:
+  - good-invoice-reconciler
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-registered
+  kind: Pod
+  resources:
+  - good-invoice-reconciler
+  result: pass
+- policy: membrane-unregistered-agents
+  rule: pod-requires-agent-id
+  kind: Pod
+  resources:
+  - good-invoice-reconciler
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-manifest-sha256
+  kind: Pod
+  resources:
+  - good-code-runner
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-tier-label
+  kind: Pod
+  resources:
+  - good-code-runner
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-image-digest
+  kind: Pod
+  resources:
+  - good-code-runner
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-service-account
+  kind: Pod
+  resources:
+  - good-code-runner
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-registered
+  kind: Pod
+  resources:
+  - good-code-runner
+  result: pass
+- policy: membrane-unregistered-agents
+  rule: pod-requires-agent-id
+  kind: Pod
+  resources:
+  - good-code-runner
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-no-token-automount-tier3
+  kind: Pod
+  resources:
+  - good-kb-reader
+  result: skip
+- policy: membrane-agent-workloads
+  rule: pod-no-token-automount-tier3
+  kind: Pod
+  resources:
+  - good-invoice-reconciler
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-no-token-automount-tier3
+  kind: Pod
+  resources:
+  - good-code-runner
+  result: pass
+- policy: membrane-agent-workloads
+  rule: deployment-manifest-sha256
+  kind: Deployment
+  resources:
+  - good-code-runner-deploy
+  result: pass
+- policy: membrane-agent-workloads
+  rule: deployment-tier-label
+  kind: Deployment
+  resources:
+  - good-code-runner-deploy
+  result: pass
+- policy: membrane-agent-workloads
+  rule: deployment-image-digest
+  kind: Deployment
+  resources:
+  - good-code-runner-deploy
+  result: pass
+- policy: membrane-agent-workloads
+  rule: deployment-service-account
+  kind: Deployment
+  resources:
+  - good-code-runner-deploy
+  result: pass
+- policy: membrane-agent-workloads
+  rule: deployment-registered
+  kind: Deployment
+  resources:
+  - good-code-runner-deploy
+  result: pass
+- policy: membrane-agent-workloads
+  rule: deployment-no-token-automount-tier3
+  kind: Deployment
+  resources:
+  - good-code-runner-deploy
+  result: pass
+- policy: membrane-unregistered-agents
+  rule: deployment-requires-agent-id
+  kind: Deployment
+  resources:
+  - good-code-runner-deploy
+  result: pass
+- policy: membrane-agent-workloads
+  rule: deployment-manifest-sha256
+  kind: Deployment
+  resources:
+  - good-kb-reader-deploy
+  result: pass
+- policy: membrane-agent-workloads
+  rule: deployment-tier-label
+  kind: Deployment
+  resources:
+  - good-kb-reader-deploy
+  result: pass
+- policy: membrane-agent-workloads
+  rule: deployment-image-digest
+  kind: Deployment
+  resources:
+  - good-kb-reader-deploy
+  result: pass
+- policy: membrane-agent-workloads
+  rule: deployment-service-account
+  kind: Deployment
+  resources:
+  - good-kb-reader-deploy
+  result: pass
+- policy: membrane-agent-workloads
+  rule: deployment-registered
+  kind: Deployment
+  resources:
+  - good-kb-reader-deploy
+  result: pass
+- policy: membrane-agent-workloads
+  rule: deployment-no-token-automount-tier3
+  kind: Deployment
+  resources:
+  - good-kb-reader-deploy
+  result: skip
+- policy: membrane-agent-workloads
+  rule: pod-manifest-sha256
+  kind: Pod
+  resources:
+  - bad-no-sha-annotation
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-manifest-sha256
+  kind: Pod
+  resources:
+  - bad-short-sha-annotation
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-manifest-sha256
+  kind: Pod
+  resources:
+  - bad-upper-sha-annotation
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-tier-label
+  kind: Pod
+  resources:
+  - bad-no-tier
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-tier-label
+  kind: Pod
+  resources:
+  - bad-tier-5
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-tier-label
+  kind: Pod
+  resources:
+  - bad-tier-0
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-image-digest
+  kind: Pod
+  resources:
+  - bad-image-tag
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-image-digest
+  kind: Pod
+  resources:
+  - bad-image-short-digest
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-image-digest
+  kind: Pod
+  resources:
+  - bad-init-image-tag
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-image-digest
+  kind: Pod
+  resources:
+  - bad-sidecar-image-tag
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-service-account
+  kind: Pod
+  resources:
+  - bad-default-sa
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-service-account
+  kind: Pod
+  resources:
+  - bad-no-sa
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-no-token-automount-tier3
+  kind: Pod
+  resources:
+  - bad-tier3-automount-true
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-no-token-automount-tier3
+  kind: Pod
+  resources:
+  - bad-tier3-automount-unset
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-no-token-automount-tier3
+  kind: Pod
+  resources:
+  - bad-tier4-automount-unset
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-registered
+  kind: Pod
+  resources:
+  - bad-unregistered-agent
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-registered
+  kind: Pod
+  resources:
+  - bad-hash-mismatch
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-no-token-automount-tier3
+  kind: Pod
+  resources:
+  - ok-tier1-automount-unset
+  result: skip
+- policy: membrane-agent-workloads
+  rule: deployment-manifest-sha256
+  kind: Deployment
+  resources:
+  - bad-deploy-no-sha
+  result: fail
+- policy: membrane-agent-workloads
+  rule: deployment-tier-label
+  kind: Deployment
+  resources:
+  - bad-deploy-no-tier
+  result: fail
+- policy: membrane-agent-workloads
+  rule: deployment-image-digest
+  kind: Deployment
+  resources:
+  - bad-deploy-image-tag
+  result: fail
+- policy: membrane-agent-workloads
+  rule: deployment-service-account
+  kind: Deployment
+  resources:
+  - bad-deploy-default-sa
+  result: fail
+- policy: membrane-agent-workloads
+  rule: deployment-no-token-automount-tier3
+  kind: Deployment
+  resources:
+  - bad-deploy-automount-unset
+  result: fail
+- policy: membrane-agent-workloads
+  rule: deployment-registered
+  kind: Deployment
+  resources:
+  - bad-deploy-unregistered
+  result: fail
+- policy: membrane-agent-workloads
+  rule: deployment-registered
+  kind: Deployment
+  resources:
+  - bad-deploy-hash-mismatch
+  result: fail
+- policy: membrane-unregistered-agents
+  rule: pod-requires-agent-id
+  kind: Pod
+  resources:
+  - plain-in-agent-ns
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-manifest-sha256
+  kind: Pod
+  resources:
+  - plain-in-other-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: pod-manifest-sha256
+  kind: Pod
+  resources:
+  - plain-in-agent-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: pod-tier-label
+  kind: Pod
+  resources:
+  - plain-in-other-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: pod-tier-label
+  kind: Pod
+  resources:
+  - plain-in-agent-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: pod-image-digest
+  kind: Pod
+  resources:
+  - plain-in-other-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: pod-image-digest
+  kind: Pod
+  resources:
+  - plain-in-agent-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: pod-service-account
+  kind: Pod
+  resources:
+  - plain-in-other-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: pod-service-account
+  kind: Pod
+  resources:
+  - plain-in-agent-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: pod-registered
+  kind: Pod
+  resources:
+  - plain-in-other-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: pod-registered
+  kind: Pod
+  resources:
+  - plain-in-agent-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: pod-no-token-automount-tier3
+  kind: Pod
+  resources:
+  - plain-in-other-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: pod-no-token-automount-tier3
+  kind: Pod
+  resources:
+  - plain-in-agent-ns
+  result: skip
+- policy: membrane-unregistered-agents
+  rule: deployment-requires-agent-id
+  kind: Deployment
+  resources:
+  - plain-deploy-in-agent-ns
+  result: fail
+- policy: membrane-agent-workloads
+  rule: deployment-manifest-sha256
+  kind: Deployment
+  resources:
+  - plain-deploy-in-other-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: deployment-tier-label
+  kind: Deployment
+  resources:
+  - plain-deploy-in-other-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: deployment-image-digest
+  kind: Deployment
+  resources:
+  - plain-deploy-in-other-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: deployment-service-account
+  kind: Deployment
+  resources:
+  - plain-deploy-in-other-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: deployment-registered
+  kind: Deployment
+  resources:
+  - plain-deploy-in-other-ns
+  result: skip

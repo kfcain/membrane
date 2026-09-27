@@ -1,0 +1,44 @@
+# Deliberately bad manifest. Base: ticket-triager.
+# expect: tier 2 needs spec.evals
+apiVersion: membrane/v1
+kind: AgentManifest
+metadata:
+  id: t2-no-evals
+  owner: it-ops@example.com
+  description: Reads new service desk tickets, sets priority, and routes them to a queue.
+spec:
+  tier: 2
+  status: active
+  runtime:
+    type: k8s
+    namespace: agents
+    service_account: ticket-triager
+    image: registry.example.com/agents/ticket-triager@sha256:2222222222222222222222222222222222222222222222222222222222222222
+  model:
+    provider: bedrock
+    id: anthropic.claude-haiku
+    pinned: true
+  delegation:
+    requires_delegator: false
+  tools:
+  - name: tickets.read
+    scope: tickets:read
+    irreversible: false
+    rate_limit_per_min: 120
+  - name: tickets.update_priority
+    scope: tickets:write
+    irreversible: false
+    rate_limit_per_min: 60
+  - name: tickets.route
+    scope: tickets:write
+    irreversible: false
+    rate_limit_per_min: 60
+  egress: []
+  data_scopes:
+  - itsm.tickets
+  approval:
+    required_for:
+    - irreversible
+  aibom:
+    format: cyclonedx-1.6
+    ref: aibom/ticket-triager.cdx.json

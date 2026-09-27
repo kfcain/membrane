@@ -1,0 +1,89 @@
+{
+  "entries": [
+    {
+      "hint": "invoice-reconciler",
+      "jwt_svid_ttl": 300,
+      "parent_id": "spiffe://example.org/spire/agent/k8s_psat/membrane",
+      "selectors": [
+        {
+          "type": "k8s",
+          "value": "ns:agents-finance"
+        },
+        {
+          "type": "k8s",
+          "value": "sa:invoice-reconciler"
+        }
+      ],
+      "spiffe_id": "spiffe://example.org/ns/agents-finance/sa/invoice-reconciler",
+      "x509_svid_ttl": 3600
+    },
+    {
+      "hint": "code-runner",
+      "jwt_svid_ttl": 300,
+      "parent_id": "spiffe://example.org/spire/agent/k8s_psat/membrane",
+      "selectors": [
+        {
+          "type": "k8s",
+          "value": "ns:agents-sandbox"
+        },
+        {
+          "type": "k8s",
+          "value": "sa:code-runner"
+        }
+      ],
+      "spiffe_id": "spiffe://example.org/ns/agents-sandbox/sa/code-runner",
+      "x509_svid_ttl": 3600
+    },
+    {
+      "hint": "kb-reader",
+      "jwt_svid_ttl": 300,
+      "parent_id": "spiffe://example.org/spire/agent/k8s_psat/membrane",
+      "selectors": [
+        {
+          "type": "k8s",
+          "value": "ns:agents"
+        },
+        {
+          "type": "k8s",
+          "value": "sa:kb-reader"
+        }
+      ],
+      "spiffe_id": "spiffe://example.org/ns/agents/sa/kb-reader",
+      "x509_svid_ttl": 3600
+    },
+    {
+      "hint": "ticket-triager",
+      "jwt_svid_ttl": 300,
+      "parent_id": "spiffe://example.org/spire/agent/k8s_psat/membrane",
+      "selectors": [
+        {
+          "type": "k8s",
+          "value": "ns:agents"
+        },
+        {
+          "type": "k8s",
+          "value": "sa:ticket-triager"
+        }
+      ],
+      "spiffe_id": "spiffe://example.org/ns/agents/sa/ticket-triager",
+      "x509_svid_ttl": 3600
+    },
+    {
+      "hint": "canary",
+      "jwt_svid_ttl": 300,
+      "parent_id": "spiffe://example.org/spire/agent/k8s_psat/membrane",
+      "selectors": [
+        {
+          "type": "k8s",
+          "value": "ns:membrane-system"
+        },
+        {
+          "type": "k8s",
+          "value": "sa:canary"
+        }
+      ],
+      "spiffe_id": "spiffe://example.org/ns/membrane-system/sa/canary",
+      "x509_svid_ttl": 3600
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+# Deliberately bad manifest. Base: kb-reader.
+# expect: (write or admin)
+apiVersion: membrane/v1
+kind: AgentManifest
+metadata:
+  id: t1-admin-scope
+  owner: platform-ai@example.com
+  description: Answers staff questions from the internal knowledge base. Read only.
+spec:
+  tier: 1
+  status: active
+  runtime:
+    type: k8s
+    namespace: agents
+    service_account: kb-reader
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+  model:
+    provider: bedrock
+    id: anthropic.claude-sonnet
+    pinned: true
+  delegation:
+    requires_delegator: true
+  tools:
+  - name: kb.search
+    scope: kb:read
+    irreversible: false
+    rate_limit_per_min: 60
+  - name: kb.admin
+    scope: kb:admin
+    irreversible: false
+  egress: []
+  data_scopes:
+  - kb.public-internal
+  approval:
+    required_for: []

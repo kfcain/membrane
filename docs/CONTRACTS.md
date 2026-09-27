@@ -37,6 +37,9 @@ Write all prose in ASD-STE100 Simplified Technical English: short sentences, act
 | `MEMBRANE_OPA_BIN` | `opa` | OPA binary for `opa eval` |
 | `MEMBRANE_OPA_URL` | unset | If set, the gateway calls the OPA REST API instead of `opa eval` |
 | `MEMBRANE_GATEWAY_URL` | `http://127.0.0.1:8750` | Canary and demo target |
+| `MEMBRANE_POLICY_DIR` | `policy/runtime` | Rego files the gateway loads (test files excluded) |
+| `MEMBRANE_OPA_DATA` | `out/generated/opa/data.json` | Data document the gateway loads |
+| `MEMBRANE_SCF_ROWS` | Beacon checkout | Path to Beacon's pinned SCF `rows.json` for `membrane checks doc` |
 
 ## 3. Runtime authorization (gateway to OPA)
 
@@ -83,15 +86,19 @@ Decision rules, in order. The first rule that matches wins.
 2. Agent not in `manifests`: `deny`, `agent_unregistered`.
 3. `manifest_sha256` differs from the registered hash: `deny`, `manifest_hash_mismatch`.
 4. Manifest status is not `active`: `deny`, `agent_not_active`.
-5. Override mode `killed` or `quarantined`: `deny`, `override_killed` or `override_quarantined`.
+5. Override mode `killed` or `quarantined`: `deny`, `override_killed` or `override_quarantined`. An override with an unknown or missing mode: `deny`, `override_unknown`.
 6. Tool not in the manifest: `deny`, `tool_not_in_manifest`.
-7. `requires_delegator` is true and `delegator` is empty or null: `deny`, `delegator_required`.
+7. `requires_delegator` is true and `delegator` is empty, white space, or null: `deny`, `delegator_required`.
 8. Agent is a canary and the tool is irreversible: `deny`, `canary_irreversible_forbidden`.
-9. Approval is needed and no valid approval matches this `action_sha256`: `require_approval`, `approval_required`. Approval is needed when the tool is irreversible and `approval_required_for` has `irreversible`, or when `approval_required_for` has `all`, or when the override mode is `restricted`.
-10. A supplied approval does not match (`verified` false or other `action_sha256`): `deny`, `approval_mismatch`. This rule applies whenever an approval object is present and invalid, even if no approval is needed.
+9. An approval object is present and it is not valid for this `action_sha256` (`verified` false, other hash, or malformed): `deny`, `approval_mismatch`. This rule comes before rule 10 so that a replayed approval never opens a new approval request.
+10. Approval is needed and no valid approval matches this `action_sha256`: `require_approval`, `approval_required`. Approval is needed when the tool is irreversible and `approval_required_for` has `irreversible`, or when `approval_required_for` has `all`, or when the override mode is `restricted`.
 11. Otherwise `allow`, reason `within_manifest`. Override mode `throttled` adds reason `throttled`; the gateway applies the rate limit.
 
+Fail-closed defaults in the policy: a missing `requires_delegator` counts as true. A tool with no `irreversible` flag counts as irreversible. A missing `approval_required_for` counts as `["all"]`. A missing or empty `input.action_sha256` never matches an approval. Any evaluation error gives `deny` with reason `policy_error`.
+
 Rate limits are enforced in the gateway, not in OPA. A rate-limit rejection is a `deny` with reason `rate_limited`, logged the same way.
+
+The gateway adds three rules that can only make a decision stricter. An approval token works once. The approver must be a different person from the delegator. When two calls race for one approval, the loser gets `deny` with reason `approval_consumed`.
 
 ## 4. Decision log payload (`kind: decision`)
 
@@ -113,13 +120,13 @@ Rate limits are enforced in the gateway, not in OPA. A rate-limit rejection is a
 }
 ```
 
-The record envelope carries `trace_id` (32 lowercase hex) and `agent_id`. The runtime part must verify the OpenTelemetry GenAI attribute names against the current semantic conventions and list the source in `docs/SOURCES.md`.
+The record envelope carries `trace_id` (32 lowercase hex) and `agent_id`. The OpenTelemetry GenAI attribute names were verified against the semantic conventions. See `docs/SOURCES.md`.
 
 ## 5. Other evidence payloads
 
 `approval`: `{approval_id, action_sha256, agent_id, tool, resource, approver, requested_at, approved_at, expires_at}`
 
-`tool_exec`: `{exec_id, decision_id, agent_id, tool, resource, action_sha256, irreversible, approval_id, executed_at, result: "ok|error"}`. The tool backend writes it. A `tool_exec` with no matching `allow` decision is a finding.
+`tool_exec`: `{exec_id, decision_id, agent_id, tool, resource, action_sha256, irreversible, approval_id, executed_at, result: "ok|error"}`. The tool backend writes it. A `tool_exec` with no matching `allow` decision is a finding. The reference backend is a mock, so it writes mode `simulated`. A real backend writes mode `live`.
 
 `canary`: `{run_id, probes: [{probe, expected, observed, reasons, pass}], all_pass}`
 
@@ -129,7 +136,7 @@ The record envelope carries `trace_id` (32 lowercase hex) and `agent_id`. The ru
 
 `generation`: `{registry_sha256, outputs: {"<relative path>": "<sha256>"}, generator_version}`
 
-`inventory`: `{cluster, observed_at, workloads: [{namespace, name, kind, service_account, spiffe_id, labels, annotations, images}]}`. Agent workloads carry label `membrane.io/agent-id` and annotation `membrane.io/manifest-sha256`.
+`inventory`: `{cluster, observed_at, workloads: [{namespace, name, kind, service_account, spiffe_id, labels, annotations, images}]}`. Agent workloads carry label `membrane.io/agent-id` and annotation `membrane.io/manifest-sha256`. Membrane's own pods (gateway, OPA) carry label `membrane.io/component` and are exempt from AGT-INV-01.
 
 `egress_flow`: `{window_start, window_end, flows: [{agent_id, namespace, pod, destination_fqdn, destination_ip, port, verdict: "allowed|denied", count}]}`
 
@@ -137,7 +144,7 @@ The record envelope carries `trace_id` (32 lowercase hex) and `agent_id`. The ru
 
 `pipeline_run`: `{run_id, agent_id, commit, manifest_sha256, image_digest, gates: {manifest_policy: "pass|fail|skipped", evals: {suite, score, min_pass, result: "pass|fail|skipped"}, aibom: "present|missing", signature: "verified|missing"}, deployed: bool, finished_at}`
 
-`check_result`: see section 7.
+`check_result`: `{run_id, assessed_at, demo, results_sha256, oscal_sha256, statuses, input_record_count}`.
 
 ## 6. Identity tokens (reference only)
 
@@ -151,7 +158,7 @@ Approval tokens use the same format with fields `{"approval_id","action_sha256",
 
 ## 7. Checks
 
-Catalog file: `controls/checks.yaml`. Each check has `id`, `title`, `question` (one sentence), `evidence_kinds`, `max_age_hours`, `target` (the pass condition in words), and `controls` with `nist_800_53` (Rev 5 ids) and `scf_ao` (ids that exist in Beacon's pinned `rows.json` only). Do not invent ids. If no row fits, leave the list empty.
+Catalog file: `controls/checks.yaml`. Each check has `id`, `title`, `question` (one sentence), `evidence_kinds`, `supporting_kinds` (kinds read for context but not needed for a result), `max_age_hours`, `target`, `remediation` (the pass condition in words), and `controls` with `nist_800_53` (Rev 5 ids) and `scf_ao` (ids that exist in Beacon's pinned `rows.json` only). Do not invent ids. If no row fits, leave the list empty.
 
 Check status:
 
@@ -179,6 +186,7 @@ A run with `--allow-nonlive` marks every result `"demo": true` and prints a bann
 | `membrane canary run` | runtime |
 | `membrane respond <agent_id> --step throttle|restrict|quarantine|kill|restore [--reason ..] [--dry-run]` | runtime |
 | `membrane drill kill <agent_id>` | runtime |
-| `membrane checks run [--allow-nonlive] [--out out/assessment]` | checks |
+| `membrane checks run [--allow-nonlive] [--evidence DIR ...] [--now RFC3339] [--out out/assessment] [--no-emit]` | checks |
+| `membrane checks doc` | checks |
 
 Every command returns 0 on success and a non-zero code on failure. Every command that makes evidence says the file path it wrote.

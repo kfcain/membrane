@@ -1,0 +1,638 @@
+# Test resources for the membrane Kyverno policies. Names state the expected outcome.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: good-kb-reader
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: good-invoice-reconciler
+  namespace: agents-finance
+  labels:
+    membrane.io/agent-id: invoice-reconciler
+    membrane.io/tier: '3'
+  annotations:
+    membrane.io/manifest-sha256: 4cc66320962fcb4d949a49a77acbdf20cf0506ecfd5d9b9d750b7b60361b3a18
+spec:
+  serviceAccountName: invoice-reconciler
+  containers:
+  - name: agent
+    image: registry.example.com/agents/invoice-reconciler@sha256:3333333333333333333333333333333333333333333333333333333333333333
+  automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: good-code-runner
+  namespace: agents-sandbox
+  labels:
+    membrane.io/agent-id: code-runner
+    membrane.io/tier: '4'
+  annotations:
+    membrane.io/manifest-sha256: 9d6e3c3e050ecf7a938ac46b2530cf2ca2168085b88c577fe44e11184d82ae16
+spec:
+  serviceAccountName: code-runner
+  containers:
+  - name: agent
+    image: registry.example.com/agents/code-runner@sha256:4444444444444444444444444444444444444444444444444444444444444444
+  automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: good-code-runner-deploy
+  namespace: agents-sandbox
+  labels:
+    app: code-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: code-runner
+  template:
+    metadata:
+      labels:
+        app: code-runner
+        membrane.io/agent-id: code-runner
+        membrane.io/tier: '4'
+      annotations:
+        membrane.io/manifest-sha256: 9d6e3c3e050ecf7a938ac46b2530cf2ca2168085b88c577fe44e11184d82ae16
+    spec:
+      serviceAccountName: code-runner
+      containers:
+      - name: agent
+        image: registry.example.com/agents/code-runner@sha256:4444444444444444444444444444444444444444444444444444444444444444
+      automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: good-kb-reader-deploy
+  namespace: agents
+  labels:
+    app: kb-reader
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kb-reader
+  template:
+    metadata:
+      labels:
+        app: kb-reader
+        membrane.io/agent-id: kb-reader
+        membrane.io/tier: '1'
+      annotations:
+        membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+    spec:
+      serviceAccountName: kb-reader
+      containers:
+      - name: agent
+        image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-no-sha-annotation
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-short-sha-annotation
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: abc123
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-upper-sha-annotation
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 0F6620A7DDDF9D7BB1E67BD79D5EC2184C11A49543E2F0305BF5FE8C19EFA35C
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-no-tier
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-tier-5
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '5'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-tier-0
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '0'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-image-tag
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader:1.4.0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-image-short-digest
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:abc
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-init-image-tag
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+  initContainers:
+  - name: init
+    image: busybox:latest
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-sidecar-image-tag
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+  - name: proxy
+    image: envoyproxy/envoy:v1.31
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-default-sa
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: default
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-no-sa
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-tier3-automount-true
+  namespace: agents-finance
+  labels:
+    membrane.io/agent-id: invoice-reconciler
+    membrane.io/tier: '3'
+  annotations:
+    membrane.io/manifest-sha256: 4cc66320962fcb4d949a49a77acbdf20cf0506ecfd5d9b9d750b7b60361b3a18
+spec:
+  serviceAccountName: invoice-reconciler
+  containers:
+  - name: agent
+    image: registry.example.com/agents/invoice-reconciler@sha256:3333333333333333333333333333333333333333333333333333333333333333
+  automountServiceAccountToken: true
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-tier3-automount-unset
+  namespace: agents-finance
+  labels:
+    membrane.io/agent-id: invoice-reconciler
+    membrane.io/tier: '3'
+  annotations:
+    membrane.io/manifest-sha256: 4cc66320962fcb4d949a49a77acbdf20cf0506ecfd5d9b9d750b7b60361b3a18
+spec:
+  serviceAccountName: invoice-reconciler
+  containers:
+  - name: agent
+    image: registry.example.com/agents/invoice-reconciler@sha256:3333333333333333333333333333333333333333333333333333333333333333
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-tier4-automount-unset
+  namespace: agents-sandbox
+  labels:
+    membrane.io/agent-id: code-runner
+    membrane.io/tier: '4'
+  annotations:
+    membrane.io/manifest-sha256: 9d6e3c3e050ecf7a938ac46b2530cf2ca2168085b88c577fe44e11184d82ae16
+spec:
+  serviceAccountName: code-runner
+  containers:
+  - name: agent
+    image: registry.example.com/agents/code-runner@sha256:4444444444444444444444444444444444444444444444444444444444444444
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-unregistered-agent
+  namespace: agents
+  labels:
+    membrane.io/agent-id: shadow-agent
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-hash-mismatch
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 4cc66320962fcb4d949a49a77acbdf20cf0506ecfd5d9b9d750b7b60361b3a18
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ok-tier1-automount-unset
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-deploy-no-sha
+  namespace: agents-sandbox
+  labels:
+    app: code-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: code-runner
+  template:
+    metadata:
+      labels:
+        app: code-runner
+        membrane.io/agent-id: code-runner
+        membrane.io/tier: '4'
+    spec:
+      serviceAccountName: code-runner
+      containers:
+      - name: agent
+        image: registry.example.com/agents/code-runner@sha256:4444444444444444444444444444444444444444444444444444444444444444
+      automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-deploy-no-tier
+  namespace: agents-sandbox
+  labels:
+    app: code-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: code-runner
+  template:
+    metadata:
+      labels:
+        app: code-runner
+        membrane.io/agent-id: code-runner
+      annotations:
+        membrane.io/manifest-sha256: 9d6e3c3e050ecf7a938ac46b2530cf2ca2168085b88c577fe44e11184d82ae16
+    spec:
+      serviceAccountName: code-runner
+      containers:
+      - name: agent
+        image: registry.example.com/agents/code-runner@sha256:4444444444444444444444444444444444444444444444444444444444444444
+      automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-deploy-image-tag
+  namespace: agents-sandbox
+  labels:
+    app: code-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: code-runner
+  template:
+    metadata:
+      labels:
+        app: code-runner
+        membrane.io/agent-id: code-runner
+        membrane.io/tier: '4'
+      annotations:
+        membrane.io/manifest-sha256: 9d6e3c3e050ecf7a938ac46b2530cf2ca2168085b88c577fe44e11184d82ae16
+    spec:
+      serviceAccountName: code-runner
+      containers:
+      - name: agent
+        image: registry.example.com/agents/code-runner:latest
+      automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-deploy-default-sa
+  namespace: agents-sandbox
+  labels:
+    app: code-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: code-runner
+  template:
+    metadata:
+      labels:
+        app: code-runner
+        membrane.io/agent-id: code-runner
+        membrane.io/tier: '4'
+      annotations:
+        membrane.io/manifest-sha256: 9d6e3c3e050ecf7a938ac46b2530cf2ca2168085b88c577fe44e11184d82ae16
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: agent
+        image: registry.example.com/agents/code-runner@sha256:4444444444444444444444444444444444444444444444444444444444444444
+      automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-deploy-automount-unset
+  namespace: agents-sandbox
+  labels:
+    app: code-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: code-runner
+  template:
+    metadata:
+      labels:
+        app: code-runner
+        membrane.io/agent-id: code-runner
+        membrane.io/tier: '4'
+      annotations:
+        membrane.io/manifest-sha256: 9d6e3c3e050ecf7a938ac46b2530cf2ca2168085b88c577fe44e11184d82ae16
+    spec:
+      serviceAccountName: code-runner
+      containers:
+      - name: agent
+        image: registry.example.com/agents/code-runner@sha256:4444444444444444444444444444444444444444444444444444444444444444
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-deploy-unregistered
+  namespace: agents-sandbox
+  labels:
+    app: code-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: code-runner
+  template:
+    metadata:
+      labels:
+        app: code-runner
+        membrane.io/agent-id: shadow-agent
+        membrane.io/tier: '4'
+      annotations:
+        membrane.io/manifest-sha256: 9d6e3c3e050ecf7a938ac46b2530cf2ca2168085b88c577fe44e11184d82ae16
+    spec:
+      serviceAccountName: code-runner
+      containers:
+      - name: agent
+        image: registry.example.com/agents/code-runner@sha256:4444444444444444444444444444444444444444444444444444444444444444
+      automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-deploy-hash-mismatch
+  namespace: agents-sandbox
+  labels:
+    app: code-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: code-runner
+  template:
+    metadata:
+      labels:
+        app: code-runner
+        membrane.io/agent-id: code-runner
+        membrane.io/tier: '4'
+      annotations:
+        membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+    spec:
+      serviceAccountName: code-runner
+      containers:
+      - name: agent
+        image: registry.example.com/agents/code-runner@sha256:4444444444444444444444444444444444444444444444444444444444444444
+      automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: plain-in-agent-ns
+  namespace: agents
+  labels:
+    app: x
+spec:
+  containers:
+  - name: x
+    image: nginx:latest
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: plain-in-other-ns
+  namespace: web
+  labels:
+    app: x
+spec:
+  containers:
+  - name: x
+    image: nginx:latest
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plain-deploy-in-agent-ns
+  namespace: agents-finance
+spec:
+  selector:
+    matchLabels:
+      app: x
+  template:
+    metadata:
+      labels:
+        app: x
+    spec:
+      containers:
+      - name: x
+        image: nginx:latest
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plain-deploy-in-other-ns
+  namespace: web
+spec:
+  selector:
+    matchLabels:
+      app: x
+  template:
+    metadata:
+      labels:
+        app: x
+    spec:
+      containers:
+      - name: x
+        image: nginx:latest

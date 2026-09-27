@@ -1,0 +1,273 @@
+"""Reference tool gateway HTTP server.
+
+POST /v1/tools/call  body {tool, resource, args, delegator, approval_token?}
+                     headers Authorization: Bearer <identity token>, traceparent (optional)
+GET  /healthz
+
+Every POST produces exactly one `decision` evidence record, including
+malformed requests and policy failures. Policy failures deny (fail closed).
+"""
+from __future__ import annotations
+
+import json
+import re
+import secrets
+import sys
+import threading
+import time
+import uuid
+from collections import deque
+from dataclasses import dataclass, field
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+from .. import evidence
+from . import approvals
+from .opa import PolicyError, default_data_path, default_policy_dir, evaluate, snapshot
+from .state import read_overrides
+from .tokens import TokenError, action_sha256, decode_unverified, verify_identity
+
+MAX_BODY = 1 << 20
+TRACEPARENT_RE = re.compile(r"^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$")
+SOURCE = "membrane.gateway"
+BACKEND_SOURCE = "membrane.gateway.mock_backend"
+
+
+def parse_traceparent(value: str | None) -> str:
+    """Return the W3C trace id from traceparent, or a new random one."""
+    if value:
+        m = TRACEPARENT_RE.match(value.strip())
+        if m and m.group(1) != "ff" and m.group(2) != "0" * 32 and m.group(3) != "0" * 16:
+            return m.group(2)
+    return secrets.token_hex(16)
+
+
+@dataclass
+class GatewayConfig:
+    policy_dir: Path = field(default_factory=default_policy_dir)
+    data_path: Path = field(default_factory=default_data_path)
+    opa_bin: str | None = None
+    opa_url: str | None = None
+
+
+class RateLimiter:
+    """Sliding 60 second window per (agent, tool). Counts only admitted calls."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._hits: dict[tuple[str, str], deque] = {}
+
+    def admit(self, agent_id: str, tool: str, limit_per_min: int | None, now: float | None = None) -> bool:
+        if not limit_per_min:
+            return True
+        now = time.monotonic() if now is None else now
+        with self._lock:
+            q = self._hits.setdefault((agent_id, tool), deque())
+            while q and now - q[0] >= 60.0:
+                q.popleft()
+            if len(q) >= limit_per_min:
+                return False
+            q.append(now)
+            return True
+
+
+class MockToolBackend:
+    """Stands in for real tools. It executes nothing. It writes `tool_exec` evidence.
+
+    Records use mode "simulated" because no real system took the action.
+    """
+
+    def execute(self, *, decision_id: str, agent_id: str, tool: str, resource, action_hash: str,
+                irreversible, approval_id, trace_id: str) -> dict:
+        exec_id = str(uuid.uuid4())
+        payload = {"exec_id": exec_id, "decision_id": decision_id, "agent_id": agent_id, "tool": tool,
+                   "resource": resource, "action_sha256": action_hash, "irreversible": irreversible,
+                   "approval_id": approval_id, "executed_at": evidence.now_rfc3339(), "result": "ok"}
+        evidence.emit("tool_exec", BACKEND_SOURCE, payload, mode="simulated", agent_id=agent_id, trace_id=trace_id)
+        return {"status": "ok", "exec_id": exec_id}
+
+
+class Gateway:
+    def __init__(self, config: GatewayConfig | None = None, backend: MockToolBackend | None = None) -> None:
+        self.config = config or GatewayConfig()
+        self.backend = backend or MockToolBackend()
+        self.limiter = RateLimiter()
+
+    # The whole request path. Returns (http status, response body).
+    def handle_call(self, raw_body: bytes, authorization: str | None, traceparent: str | None) -> tuple[int, dict]:
+        t0 = time.perf_counter()
+        trace_id = parse_traceparent(traceparent)
+        decision_id = str(uuid.uuid4())
+        rec = {"agent_id": None, "manifest_sha256": None, "tier": None, "delegator": None, "tool": None,
+               "irreversible": None, "resource": None, "action_sha256": None, "approval_id": None,
+               "approver": None, "policy_sha256": None, "data_sha256": None}
+
+        # 1. Identity. An invalid token still yields a claimed id for the log.
+        verified_claims, claims = None, {}
+        token = None
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization[len("Bearer "):].strip()
+        if token:
+            try:
+                verified_claims = verify_identity(token)
+                claims = verified_claims
+            except TokenError:
+                try:
+                    claims = decode_unverified(token)
+                except TokenError:
+                    claims = {}
+        agent_id = claims.get("agent_id") if isinstance(claims.get("agent_id"), str) else None
+        manifest_hash = claims.get("manifest_sha256") if isinstance(claims.get("manifest_sha256"), str) else None
+        rec.update(agent_id=agent_id, manifest_sha256=manifest_hash)
+
+        # 2. Request body.
+        try:
+            body = json.loads(raw_body or b"")
+            if not isinstance(body, dict):
+                raise ValueError("body must be a JSON object")
+            tool = body.get("tool")
+            if not isinstance(tool, str) or not tool:
+                raise ValueError("tool must be a non-empty string")
+            resource = body.get("resource")
+            if resource is not None and not isinstance(resource, str):
+                raise ValueError("resource must be a string or null")
+            args = body.get("args", {})
+            if args is None:
+                args = {}
+            if not isinstance(args, dict):
+                raise ValueError("args must be an object")
+            delegator = body.get("delegator")
+            if delegator is not None and not isinstance(delegator, str):
+                raise ValueError("delegator must be a string or null")
+            approval_token = body.get("approval_token")
+            if approval_token is not None and not isinstance(approval_token, str):
+                raise ValueError("approval_token must be a string")
+        except ValueError as exc:
+            return self._finish(403, "deny", ["policy_error"], rec, decision_id, trace_id, t0,
+                                detail=f"request parse error: {exc}")
+        act_hash = action_sha256(agent_id or "", tool, resource, args)
+        rec.update(tool=tool, resource=resource, delegator=delegator or None, action_sha256=act_hash)
+
+        # 3. Approval token. OPA gets only the verified flag and the claims.
+        approval_obj = approvals.check_token(approval_token) if approval_token else None
+        if approval_obj:
+            rec.update(approval_id=approval_obj.get("approval_id"), approver=approval_obj.get("approver"))
+
+        input_doc = {"agent_id": agent_id or "", "identity_verified": verified_claims is not None,
+                     "manifest_sha256": manifest_hash or "", "tool": tool, "action_sha256": act_hash,
+                     "delegator": delegator or None, "approval": approval_obj}
+
+        # 4. Policy. Every failure here is policy_error.
+        try:
+            overrides = read_overrides()
+            snap = snapshot(self.config.policy_dir, self.config.data_path, overrides)
+            rec.update(policy_sha256=snap.policy_sha256, data_sha256=snap.data_sha256)
+            man = snap.data["membrane"]["manifests"].get(agent_id or "")
+            tool_def = (man or {}).get("tools", {}).get(tool) if isinstance(man, dict) else None
+            if isinstance(man, dict):
+                rec["tier"] = man.get("tier")
+            if isinstance(tool_def, dict):
+                rec["irreversible"] = tool_def.get("irreversible")
+            result = evaluate(snap, input_doc, opa_bin=self.config.opa_bin, opa_url=self.config.opa_url)
+        except (PolicyError, ValueError, OSError) as exc:
+            return self._finish(403, "deny", ["policy_error"], rec, decision_id, trace_id, t0, detail=str(exc))
+
+        decision, reasons = result["decision"], result["reasons"]
+
+        # 5. Gateway rate limit. It only tightens an allow.
+        if decision == "allow":
+            limit = tool_def.get("rate_limit_per_min") if isinstance(tool_def, dict) else None
+            if (overrides.get(agent_id or "") or {}).get("mode") == "throttled" and limit:
+                limit = max(1, int(limit) // 2)
+            if not self.limiter.admit(agent_id or "", tool, limit):
+                decision, reasons = "deny", ["rate_limited"]
+
+        # 6. Single use approval. It only tightens an allow.
+        if decision == "allow" and approval_obj and approval_obj.get("verified"):
+            if not approvals.consume(approval_obj["approval_id"], decision_id):
+                decision, reasons = "deny", ["approval_mismatch", "approval_consumed"]
+
+        if decision == "require_approval":
+            pending = approvals.create_pending(agent_id=agent_id or "", tool=tool, resource=resource,
+                                               action_sha256=act_hash, delegator=delegator or None,
+                                               decision_id=decision_id, trace_id=trace_id)
+            rec["approval_id"], rec["approver"] = pending["approval_id"], None
+            return self._finish(202, decision, reasons, rec, decision_id, trace_id, t0)
+
+        if decision == "deny":
+            return self._finish(403, decision, reasons, rec, decision_id, trace_id, t0)
+
+        status, body_out = self._finish(200, decision, reasons, rec, decision_id, trace_id, t0)
+        body_out["result"] = self.backend.execute(
+            decision_id=decision_id, agent_id=agent_id or "", tool=tool, resource=resource,
+            action_hash=act_hash, irreversible=rec["irreversible"],
+            approval_id=rec["approval_id"] if approval_obj else None, trace_id=trace_id)
+        return status, body_out
+
+    def _finish(self, status: int, decision: str, reasons: list[str], rec: dict, decision_id: str,
+                trace_id: str, t0: float, detail: str | None = None) -> tuple[int, dict]:
+        otel = {"gen_ai.operation.name": "execute_tool", "gen_ai.tool.call.id": decision_id}
+        if rec["agent_id"]:
+            otel["gen_ai.agent.id"] = rec["agent_id"]
+            otel["gen_ai.agent.name"] = rec["agent_id"]
+        if rec["tool"]:
+            otel["gen_ai.tool.name"] = rec["tool"]
+        payload = {"decision_id": decision_id, "decision": decision, "reasons": list(reasons), **rec,
+                   "latency_ms": round((time.perf_counter() - t0) * 1000.0, 3), "otel": otel}
+        evidence.emit("decision", SOURCE, payload, mode="live", agent_id=rec["agent_id"], trace_id=trace_id)
+        print(f"decision {decision:16} {','.join(reasons):40} agent={rec['agent_id']} tool={rec['tool']} "
+              f"trace={trace_id}" + (f" detail={detail}" if detail else ""), file=sys.stderr, flush=True)
+        out = {"decision": decision, "reasons": list(reasons), "decision_id": decision_id, "trace_id": trace_id,
+               "action_sha256": rec["action_sha256"]}
+        if decision == "require_approval":
+            out["approval_id"] = rec["approval_id"]
+        return status, out
+
+
+class _Handler(BaseHTTPRequestHandler):
+    server_version = "membrane-gateway/0.1"
+    gateway: Gateway  # set on the subclass
+
+    def log_message(self, fmt, *args):  # noqa: D401 - silence default access log
+        return
+
+    def _send(self, status: int, body: dict, trace_id: str | None = None) -> None:
+        raw = json.dumps(body, sort_keys=True).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        if trace_id:
+            self.send_header("traceparent", f"00-{trace_id}-{secrets.token_hex(8)}-01")
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def do_GET(self):  # noqa: N802
+        if self.path == "/healthz":
+            self._send(200, {"status": "ok"})
+        else:
+            self._send(404, {"error": "not found"})
+
+    def do_POST(self):  # noqa: N802
+        if self.path != "/v1/tools/call":
+            self._send(404, {"error": "not found"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = -1
+        raw = self.rfile.read(length) if 0 <= length <= MAX_BODY else b"<invalid length>"
+        try:
+            status, body = self.gateway.handle_call(raw, self.headers.get("Authorization"),
+                                                    self.headers.get("traceparent"))
+        except Exception as exc:  # noqa: BLE001 - never leak a 500 without a deny
+            print(f"gateway internal error: {exc!r}", file=sys.stderr)
+            self._send(500, {"decision": "deny", "reasons": ["gateway_error"]})
+            return
+        self._send(status, body, body.get("trace_id"))
+
+
+def make_server(host: str, port: int, gateway: Gateway | None = None) -> ThreadingHTTPServer:
+    handler = type("GatewayHandler", (_Handler,), {"gateway": gateway or Gateway()})
+    srv = ThreadingHTTPServer((host, port), handler)
+    srv.daemon_threads = True
+    return srv

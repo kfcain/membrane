@@ -1,0 +1,55 @@
+# Deliberately bad manifest. Base: invoice-reconciler.
+# expect: must not contain a wildcard
+apiVersion: membrane/v1
+kind: AgentManifest
+metadata:
+  id: t3-wildcard-egress
+  owner: finance-systems@example.com
+  description: Matches vendor invoices to purchase orders and posts approved adjustments in the ERP.
+spec:
+  tier: 3
+  status: active
+  runtime:
+    type: k8s
+    namespace: agents-finance
+    service_account: invoice-reconciler
+    image: registry.example.com/agents/invoice-reconciler@sha256:3333333333333333333333333333333333333333333333333333333333333333
+  model:
+    provider: bedrock
+    id: anthropic.claude-sonnet
+    pinned: true
+  delegation:
+    requires_delegator: true
+  tools:
+  - name: erp.read_invoices
+    scope: finance:read
+    irreversible: false
+    rate_limit_per_min: 60
+  - name: erp.read_purchase_orders
+    scope: finance:read
+    irreversible: false
+    rate_limit_per_min: 60
+  - name: erp.post_adjustment
+    scope: finance:write
+    irreversible: true
+    rate_limit_per_min: 5
+  - name: email.send_vendor_notice
+    scope: email:write
+    irreversible: true
+    rate_limit_per_min: 5
+  egress:
+  - erp.internal.example.com
+  - api.vendor-bank.example.com
+  - '*.vendor-bank.example.com'
+  data_scopes:
+  - finance.ap
+  approval:
+    required_for:
+    - irreversible
+    approvers_group: finance-approvers
+  evals:
+    suite: finance-v3
+    min_pass: 0.97
+  aibom:
+    format: cyclonedx-1.6
+    ref: aibom/invoice-reconciler.cdx.json
