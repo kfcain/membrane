@@ -64,11 +64,17 @@ def locked(name: str) -> Iterator[None]:
             fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
 
 
-def read_overrides() -> dict:
+def read_overrides(strict: bool = True) -> dict:
     """Return the overrides map. A missing file means no overrides.
 
-    A file that exists but does not parse raises ValueError. The gateway
-    treats that as a policy error and denies (fail closed).
+    A file that exists but does not parse, or is not a JSON object, raises
+    ValueError. The gateway treats that as a policy error and denies every
+    call (fail closed).
+
+    strict=True (the response playbook and the drill) also raises on an entry
+    that is not an object with a known mode. strict=False (the gateway) passes
+    such entries to OPA, and CONTRACTS section 3 rule 5 denies only that agent
+    with override_unknown.
     """
     path = overrides_path()
     if not path.exists():
@@ -76,9 +82,10 @@ def read_overrides() -> dict:
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"{path}: overrides must be a JSON object")
-    for agent_id, entry in data.items():
-        if not isinstance(entry, dict) or entry.get("mode") not in OVERRIDE_MODES:
-            raise ValueError(f"{path}: invalid override for {agent_id!r}")
+    if strict:
+        for agent_id, entry in data.items():
+            if not isinstance(entry, dict) or entry.get("mode") not in OVERRIDE_MODES:
+                raise ValueError(f"{path}: invalid override for {agent_id!r}")
     return data
 
 

@@ -185,7 +185,7 @@ class Gateway:
 
         # 4. Policy. Every failure here is policy_error.
         try:
-            overrides = read_overrides()
+            overrides = read_overrides(strict=False)
             snap = snapshot(self.config.policy_dir, self.config.data_path, overrides)
             rec.update(policy_sha256=snap.policy_sha256, data_sha256=snap.data_sha256)
             man = snap.data["membrane"]["manifests"].get(agent_id or "")
@@ -204,7 +204,8 @@ class Gateway:
         # 5. Gateway rate limit. It only tightens an allow.
         if decision == "allow":
             limit = tool_def.get("rate_limit_per_min") if isinstance(tool_def, dict) else None
-            if (overrides.get(agent_id or "") or {}).get("mode") == "throttled" and limit:
+            entry = overrides.get(agent_id or "")
+            if isinstance(entry, dict) and entry.get("mode") == "throttled" and limit:
                 limit = max(1, int(limit) // 2)
             if not self.limiter.admit(agent_id or "", tool, limit):
                 decision, reasons = "deny", ["rate_limited"]

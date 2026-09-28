@@ -566,3 +566,40 @@ def test_r06_short_body_times_out_with_a_deny_record(env):
     finally:
         srv.shutdown()
         srv.server_close()
+
+
+# ------------------------------------------------------------------ R-07: bad override entries deny only that agent
+
+
+
+@pytest.mark.parametrize("overrides,agent,want", [
+    ({"kb-reader": {"mode": "KILLED"}}, "kb-reader", ("deny", ["override_unknown"])),
+    ({"kb-reader": {"reason": "no mode"}}, "kb-reader", ("deny", ["override_unknown"])),
+    ({"kb-reader": False}, "kb-reader", ("deny", ["override_unknown"])),
+    ({"zzz": {"mode": "bogus"}}, "kb-reader", ("allow", ["within_manifest"])),
+])
+def test_r07_bad_override_entry_gives_override_unknown_for_that_agent(env, reg, tmp_path, overrides, agent, want):
+    import shutil as _sh
+    if not _sh.which("opa"):
+        pytest.skip("opa not on PATH")
+    data = tmp_path / "data.json"
+    data.write_text(json.dumps(opa_data(reg)))
+    (env / "state").mkdir(parents=True, exist_ok=True)
+    (env / "state" / "overrides.json").write_text(json.dumps(overrides))
+    gw = Gateway(GatewayConfig(policy_dir=REPO_ROOT / "policy" / "runtime", data_path=data))
+    m = reg[agent]
+    tok = tokens.issue_identity(m.id, m.sha256, tokens.spiffe_id_for(m))
+    status, body = _call(gw, tok, {"tool": "kb.search", "resource": "q", "args": {}, "delegator": "a@example.com"})
+    assert (body["decision"], body["reasons"]) == want
+
+
+def test_r07_overrides_not_an_object_is_policy_error(env, reg, tmp_path):
+    data = tmp_path / "data.json"
+    data.write_text(json.dumps(opa_data(reg)))
+    (env / "state").mkdir(parents=True, exist_ok=True)
+    (env / "state" / "overrides.json").write_text('["x"]')
+    gw = Gateway(GatewayConfig(policy_dir=REPO_ROOT / "policy" / "runtime", data_path=data))
+    m = reg["kb-reader"]
+    tok = tokens.issue_identity(m.id, m.sha256, tokens.spiffe_id_for(m))
+    status, body = _call(gw, tok, {"tool": "kb.search", "resource": "q", "args": {}, "delegator": "a@example.com"})
+    assert (body["decision"], body["reasons"]) == ("deny", ["policy_error"])
