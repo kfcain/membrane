@@ -35,7 +35,11 @@ membrane gen --registry "$LIVE/registry" --out "$LIVE/generated"
 
 step "3. Create the kind cluster with Cilium"
 kind create cluster --name "$CLUSTER" --config scripts/live/kind-config.yaml --wait 120s
-cilium install --version "$CILIUM_VERSION"
+# nameError: a pod resolver walks its search list (ndots:5, plus any host
+# search domains). With the default "refused", musl and other resolvers stop
+# at the first refused search-list name, so an allowed FQDN never resolves.
+# Found by the live run. Membrane requires this setting (LIMITS.md).
+cilium install --version "$CILIUM_VERSION" --set dnsProxy.dnsRejectResponseCode=nameError
 cilium status --wait --wait-duration 5m
 
 step "4. Install Kyverno"

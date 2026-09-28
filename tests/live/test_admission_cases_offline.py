@@ -78,19 +78,19 @@ def test_classify_never_maps_errors_to_pass_states():
     assert probes.classify(127).startswith("curl_exit_")
 
 
-def test_cilium_dns_rule_allows_search_list_forms():
-    """Regression for the first live run: example.com did not resolve because
-    the search-list forms were refused by the DNS proxy."""
+def test_cilium_dns_rule_lists_only_manifest_names():
+    """The DNS rule stays tight. Search-list lookups are handled by the
+    cluster-level nameError setting, not by extra patterns."""
     from membrane.gen.generate import cilium_egress
     from membrane.manifest import load_registry
     m = load_registry()["invoice-reconciler"]
-    dns = cilium_egress(m)["spec"]["egress"][0]["toPorts"][0]["rules"]["dns"]
-    names = {d["matchPattern"] for d in dns}
-    for n in m.spec["egress"]:
-        assert n in names
-        assert f"{n}.agents-finance.svc.cluster.local" in names
-        assert f"{n}.svc.cluster.local" in names
-        assert f"{n}.cluster.local" in names
-    # toFQDNs must stay limited to the manifest names.
-    fq = {f.get("matchName") or f.get("matchPattern") for f in cilium_egress(m)["spec"]["egress"][1]["toFQDNs"]}
-    assert fq == set(m.spec["egress"])
+    egress = cilium_egress(m)["spec"]["egress"]
+    dns = {d["matchPattern"] for d in egress[0]["toPorts"][0]["rules"]["dns"]}
+    fq = {f.get("matchName") or f.get("matchPattern") for f in egress[1]["toFQDNs"]}
+    assert dns == set(m.spec["egress"]) == fq
+
+
+def test_live_cluster_sets_dns_reject_code_name_error():
+    """Regression for the live run: with REFUSED, allowed FQDNs did not resolve."""
+    text = (ROOT / "scripts/live/run.sh").read_text()
+    assert "dnsProxy.dnsRejectResponseCode=nameError" in text

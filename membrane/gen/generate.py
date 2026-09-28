@@ -150,23 +150,10 @@ def _fqdn_selector(name: str) -> dict:
     return {"matchPattern": name} if "*" in name else {"matchName": name}
 
 
-# Pods resolve a short name through the resolv.conf search list first
-# (ndots:5). Each search-list form must pass the DNS proxy, or the resolver
-# stops on REFUSED and the allowed name never resolves. CoreDNS answers
-# these forms from its own cluster zone, so they do not leave the cluster.
-# Found by the live kind run (scripts/live).
-CLUSTER_DOMAIN = "cluster.local"
-
-
-def dns_search_forms(name: str, namespace: str) -> list[str]:
-    suffixes = [f"{namespace}.svc.{CLUSTER_DOMAIN}", f"svc.{CLUSTER_DOMAIN}", CLUSTER_DOMAIN]
-    return [name] + [f"{name}.{s}" for s in suffixes]
-
-
 def cilium_egress(m: Manifest) -> dict:
     names = sorted(set(m.spec["egress"]))
-    ns = m.spec["runtime"]["namespace"]
-    dns_names = sorted({f for n in names for f in dns_search_forms(n, ns)})
+    # The DNS rule lists only the manifest names. The cluster must set Cilium
+    # dnsProxy.dnsRejectResponseCode=nameError. See LIMITS.md "Cluster requirement".
     return {
         "apiVersion": "cilium.io/v2", "kind": "CiliumNetworkPolicy",
         "metadata": _meta(f"membrane-{m.id}-fqdn", m),
@@ -177,7 +164,7 @@ def cilium_egress(m: Manifest) -> dict:
                     "toEndpoints": [{"matchLabels": {"k8s:io.kubernetes.pod.namespace": "kube-system",
                                                      "k8s:k8s-app": "kube-dns"}}],
                     "toPorts": [{"ports": [{"port": "53", "protocol": "ANY"}],
-                                 "rules": {"dns": [{"matchPattern": n} for n in dns_names]}}],
+                                 "rules": {"dns": [{"matchPattern": n} for n in names]}}],
                 },
                 {
                     "toFQDNs": [_fqdn_selector(n) for n in names],
