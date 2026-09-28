@@ -68,3 +68,13 @@ def test_rows_hash_mismatch_fails_closed(tmp_path):
 def test_generated_doc_is_current():
     cat = load_catalog()
     assert DOC_PATH.read_text() == render(cat, load_rows(cat)), "rerun: membrane checks doc"
+
+
+def test_r22_ac_02_does_not_claim_authenticated_identity():
+    """R-22: the delegator is a string that the agent sends. Nothing authenticates it, so
+    AGT-AC-02 must not map to controls or objectives that need an authenticated identity."""
+    from membrane.checks.catalog import load_catalog
+    c = next(x for x in load_catalog().checks if x.id == "AGT-AC-02")
+    assert "IA-2" not in c.nist_800_53
+    assert not {"IAC-32_A03", "AAT-39.19_A01"} & set(c.scf_ao)
+    assert "AC-3" in c.nist_800_53

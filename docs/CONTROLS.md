@@ -35,7 +35,7 @@ ISO/IEC 42001 Annex A ids are not in this file. The standard text is not public,
 | AGT-IAM-02 | One identity per agent | inventory | 24 | IA-4, IA-9 | IAC-36_A02, AAT-39.19_A01 |
 | AGT-AU-01 | Every tool execution has an allow decision | tool_exec (+ decision) | 24 | AU-2, AU-12, AC-3 | AAT-39.3_A03, AAT-40.1_A01 |
 | AGT-AC-01 | Irreversible actions have a bound approval | tool_exec (+ approval, decision) | 24 | AC-3, AC-3(2) | AAT-36.12_A01, AAT-36.12_A02, AAT-39_A03 |
-| AGT-AC-02 | Delegator present where the manifest requires one | decision | 24 | AC-3, IA-2 | IAC-32_A03, AAT-39.19_A01 |
+| AGT-AC-02 | Delegator present where the manifest requires one | decision | 24 | AC-3 | - |
 | AGT-SC-01 | Egress stays inside the manifest list | egress_flow | 24 | SC-7, SC-7(5), AC-4 | AAT-39.2_A02, AAT-39.11_A02, NET-04_A03 |
 | AGT-CM-01 | Deploys pass every gate | pipeline_run | 720 | CM-3, CM-3(2), SA-11 | CHG-07_A01, AAT-28.5_A01, AAT-28.10_A02 |
 | AGT-TST-01 | Canary probes pass daily | canary | 24 | CA-7, SI-6 | AAT-39.14_A01, CPL-07_A06 |
@@ -142,12 +142,9 @@ ISO/IEC 42001 Annex A ids are not in this file. The standard text is not public,
 - Supporting kinds: none
 - Max age: 24 hours
 - Remediation on FAIL: Fix the authorization policy so that it denies calls with no delegator for these agents, and fix the caller so that it sends the delegator.
-- NIST SP 800-53 Rev 5: AC-3, IA-2
+- NIST SP 800-53 Rev 5: AC-3
 
-| SCF ao_id | SCF control | SCF statement (quote) |
-| --- | --- | --- |
-| IAC-32_A03 | IAC-32 | "processes acting on behalf of users are associated with uniquely identified and authenticated system users." |
-| AAT-39.19_A01 | AAT-39.19 | "all AI agent-initiated actions are mapped to authenticated user or system identities, with enforced authorization checks." |
+No SCF row fits this check.
 
 ### AGT-SC-01 Egress stays inside the manifest list
 

@@ -133,8 +133,11 @@ checks:
     remediation: >-
       Fix the authorization policy so that it denies calls with no delegator for these agents, and fix the caller so that it sends the delegator.
     controls:
-      nist_800_53: [AC-3, IA-2]
-      scf_ao: [IAC-32_A03, AAT-39.19_A01]
+      # Not IA-2, IAC-32_A03, or AAT-39.19_A01: the agent sends the delegator as a string and
+      # nothing authenticates it. Add them back only when the delegator comes from an
+      # authenticated token (for example an OAuth token exchange act claim).
+      nist_800_53: [AC-3]
+      scf_ao: []
 
   - id: AGT-SC-01
     title: Egress stays inside the manifest list

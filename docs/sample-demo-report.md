@@ -2,11 +2,11 @@
 
 > **DEMONSTRATION RUN.** This run passed `--allow-nonlive`. Fixture and simulated records count as eligible. This report is a demonstration. It is not an assessment.
 
-- Run id: `890a52f3-dfd5-5adb-97f4-0ba0f163d331`
-- Assessment time: `2026-09-27T18:27:21Z`
+- Run id: `dd4075a0-c62d-5adf-860b-9e61f4e88815`
+- Assessment time: `2026-09-28T02:54:24Z`
 - Evidence directories: `var/evidence`, `fixtures/evidence`
 - Input records: 34
-- results.json SHA-256: `363903dc9cc7adb215187ba3f86281deb90cbe03b7fbfe4c67c79660af455674`
+- results.json SHA-256: `36190eace5adb7869c342d5cc7d5e688d49a17de0621a241e3ffcd1d7e8afbe1`
 
 ## Check status counts
 
@@ -36,7 +36,7 @@ MET means every mapped check is PASS. NOT MET means no mapped check is PASS. PAR
 
 ### NIST SP 800-53 Rev 5
 
-MET 11, PARTIAL 0, NOT MET 11.
+MET 10, PARTIAL 0, NOT MET 11.
 
 | Control | Status | Checks |
 | --- | --- | --- |
@@ -51,7 +51,6 @@ MET 11, PARTIAL 0, NOT MET 11.
 | CM-3(2) | NOT MET | AGT-CM-01 FAIL |
 | CM-8 | NOT MET | AGT-INV-01 FAIL |
 | CM-8(3) | NOT MET | AGT-INV-01 FAIL |
-| IA-2 | MET | AGT-AC-02 PASS |
 | IA-4 | MET | AGT-IAM-02 PASS |
 | IA-5 | NOT MET | AGT-IAM-01 FAIL |
 | IA-5(7) | NOT MET | AGT-IAM-01 FAIL |
@@ -65,7 +64,7 @@ MET 11, PARTIAL 0, NOT MET 11.
 
 ### SCF 2026.3 assessment objectives
 
-MET 12, PARTIAL 0, NOT MET 12.
+MET 11, PARTIAL 0, NOT MET 12.
 
 | Control | Status | Checks |
 | --- | --- | --- |
@@ -80,7 +79,7 @@ MET 12, PARTIAL 0, NOT MET 12.
 | AAT-39.11_A02 | NOT MET | AGT-SC-01 FAIL |
 | AAT-39.13_A01 | MET | AGT-IR-01 PASS |
 | AAT-39.14_A01 | MET | AGT-TST-01 PASS |
-| AAT-39.19_A01 | MET | AGT-IAM-02 PASS, AGT-AC-02 PASS |
+| AAT-39.19_A01 | MET | AGT-IAM-02 PASS |
 | AAT-39_A03 | MET | AGT-AC-01 PASS |
 | AAT-40.1_A01 | MET | AGT-AU-01 PASS |
 | AST-09_A04 | NOT MET | AGT-INV-01 FAIL |
@@ -89,7 +88,6 @@ MET 12, PARTIAL 0, NOT MET 12.
 | CHG-07_A01 | NOT MET | AGT-CM-01 FAIL |
 | CPL-07_A06 | MET | AGT-TST-01 PASS |
 | IAC-14.3_A01 | NOT MET | AGT-IAM-01 FAIL |
-| IAC-32_A03 | MET | AGT-AC-02 PASS |
 | IAC-36_A02 | MET | AGT-IAM-02 PASS |
 | IRO-09_A04 | MET | AGT-IR-01 PASS |
 | NET-04_A03 | NOT MET | AGT-SC-01 FAIL |
