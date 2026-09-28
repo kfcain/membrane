@@ -2,11 +2,11 @@
 
 > **DEMONSTRATION RUN.** This run passed `--allow-nonlive`. Fixture and simulated records count as eligible. This report is a demonstration. It is not an assessment.
 
-- Run id: `78466fde-bbe0-563b-a645-86d9d7405ee4`
-- Assessment time: `2026-09-28T03:04:17Z`
+- Run id: `22d5eb44-9387-5fa6-92e7-7a5242762602`
+- Assessment time: `2026-09-28T03:08:08Z`
 - Evidence directories: `var/evidence`, `fixtures/evidence`
 - Input records: 34
-- results.json SHA-256: `cf70a4db7d3f9ac31a7d310ca507f0de9a05f7d226e4afa0c1284ca90e62801d`
+- results.json SHA-256: `157da4f5b7c68a64abaa24468a58f795130f9639d7236e382f400c335dde5ce2`
 
 ## Check status counts
 

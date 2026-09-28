@@ -2,7 +2,7 @@
 
 This file lets any capable coding model or engineer continue work on membrane without the original conversation. Read it first. Then read the files it names. Do not rely on memory of earlier sessions.
 
-Last update: 2026-09-27. Owner: kfcain.
+Last update: 2026-09-28. Owner: kfcain.
 
 ## 1. What membrane is
 
@@ -27,7 +27,7 @@ Read in this order:
 | Check engine, OSCAL 1.1.3 output, POA&M candidates, report | Done. OSCAL validates against the vendored NIST schema |
 | Beacon plugin | Done. Tested against a local Beacon install |
 | GitHub Actions CI | Green on `main` |
-| Independent cold review | See `docs/review/`. Findings may be open |
+| Independent cold review | `docs/review/REVIEW-2026-09-27.md`: 26 findings. 26 FIXED, 0 OPEN, 0 WONTFIX. One commit per finding (`Fix R-NN: ...`), each with a test. R-03 has a second commit that restored a green state |
 
 ## 3. Environment setup
 
@@ -66,7 +66,7 @@ These are the owner's rules. Keep them.
 
 ## 6. Open next steps (after the review)
 
-1. **Kind cluster test.** Run a kind cluster with Cilium. Apply `out/generated/k8s/*` and `policy/admission/kyverno/*`. Then run the egress canary probes, which are listed as not run today.
+1. **Kind cluster test.** Run a kind cluster with Cilium. Apply `out/generated/k8s/*` and `policy/admission/kyverno/*`. Then run the egress canary probes, which are listed as not run today. Add a DNS probe: an agent with a Cilium policy must fail to resolve a name outside its egress list (R-23). Also apply the admission policies and try the R-15 test pod (wrong namespace, service account, tier, and image digest) against the live webhook.
 2. **Identity.** Replace the dev HMAC identity with SPIFFE SVIDs over mTLS. The token fields already match the SPIFFE ID shape.
 3. **Real tool backend.** Add a real tool backend adapter that writes `tool_exec` records with mode `live`.
 4. **Custody.** Seal every evidence file, not only the check results, through the Beacon plugin.
