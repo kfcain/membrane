@@ -90,8 +90,17 @@ override_mode := mode if {
 	mode := object.get(entry, "mode", "<invalid>")
 	is_string(mode)
 } else := "<invalid>" if {
-	overrides[agent_id]
+	# Present with any value, even false, null, or 0.
+	agent_id in object.keys(overrides)
+} else := "<invalid>" if {
+	overrides_malformed
 } else := "none"
+
+# An overrides document that exists and is not an object denies every agent.
+overrides_malformed if {
+	o := data.membrane.overrides
+	not is_object(o)
+}
 
 non_empty_string(s) if {
 	is_string(s)

@@ -162,6 +162,20 @@ test_r5_non_object_override_fails_closed if is(eval_ov(base, {"invoice-reconcile
 
 test_r5_overrides_absent_is_fine if is(eval(base), "allow", ["within_manifest"])
 
+# R-09: an entry that is false, null, or another falsy value still counts as present.
+test_r5_false_entry_fails_closed if is(eval_ov(base, {"invoice-reconciler": false}), "deny", ["override_unknown"])
+
+test_r5_null_entry_fails_closed if is(eval_ov(base, {"invoice-reconciler": null}), "deny", ["override_unknown"])
+
+test_r5_zero_entry_fails_closed if is(eval_ov(base, {"invoice-reconciler": 0}), "deny", ["override_unknown"])
+
+# R-09: an overrides document that exists and is not an object denies every agent.
+test_r5_overrides_array_fails_closed if is(eval_ov(base, ["x"]), "deny", ["override_unknown"])
+
+test_r5_overrides_string_fails_closed if is(eval_ov(base, "killed"), "deny", ["override_unknown"])
+
+test_r5_overrides_null_fails_closed if is(eval_ov(base, null), "deny", ["override_unknown"])
+
 # ---- Rule 6: tool in manifest ---------------------------------------------
 
 test_r6_unknown_tool if is(eval(object.union(base, {"tool": "erp.delete_vendor"})), "deny", ["tool_not_in_manifest"])
