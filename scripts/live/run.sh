@@ -10,27 +10,40 @@ IMAGE_TAG="${MEMBRANE_LIVE_IMAGE:-curlimages/curl:8.11.1}"
 CILIUM_VERSION="${CILIUM_VERSION:-1.17.4}"
 KYVERNO_CHART_VERSION="${KYVERNO_CHART_VERSION:-3.4.1}"
 rm -rf "$LIVE" && mkdir -p "$LIVE"
+LOG="$LIVE/run.log"
+STEP="start"
+# On GitHub, annotations are readable through the public check-runs API.
+# Report the failed step and the last log lines as one error annotation.
+annotate_failure() {
+  if [ -n "${GITHUB_ACTIONS:-}" ]; then
+    tail_lines="$(tail -n 25 "$LOG" 2>/dev/null | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+    echo "::error title=live step failed: ${STEP}::${tail_lines}"
+  fi
+}
+trap annotate_failure ERR
+exec > >(tee -a "$LOG") 2>&1
+step() { STEP="$1"; echo "== $1"; }
 
-echo "== 1. Resolve the probe image to a digest"
+step "1. Resolve the probe image to a digest"
 docker pull -q "$IMAGE_TAG" >/dev/null
 IMAGE_REF="$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE_TAG")"
 echo "$IMAGE_REF" | tee "$LIVE/image-ref.txt"
 
-echo "== 2. Build the live registry copy and generate its config"
+step "2. Build the live registry copy and generate its config"
 python scripts/live/prepare.py --image-ref "$IMAGE_REF" --out "$LIVE/registry"
 membrane gen --registry "$LIVE/registry" --out "$LIVE/generated"
 
-echo "== 3. Create the kind cluster with Cilium"
+step "3. Create the kind cluster with Cilium"
 kind create cluster --name "$CLUSTER" --config scripts/live/kind-config.yaml --wait 120s
 cilium install --version "$CILIUM_VERSION"
 cilium status --wait --wait-duration 5m
 
-echo "== 4. Install Kyverno"
+step "4. Install Kyverno"
 helm repo add kyverno https://kyverno.github.io/kyverno/ >/dev/null
 helm repo update >/dev/null
 helm install kyverno kyverno/kyverno -n kyverno --create-namespace --version "$KYVERNO_CHART_VERSION" --wait --timeout 10m
 
-echo "== 5. Namespaces, service accounts, generated config"
+step "5. Namespaces, service accounts, generated config"
 for ns in agents agents-finance agents-sandbox; do
   kubectl create namespace "$ns"
   kubectl label namespace "$ns" membrane.io/agent-namespace=true
@@ -48,9 +61,9 @@ subprocess.run(["kubectl", "create", "serviceaccount", "not-the-agent", "-n", "a
 PY
 kubectl apply -f "$LIVE/generated/k8s/"
 
-echo "== 6. Admission policies"
+step "6. Admission policies"
 kubectl apply -f policy/admission/kyverno/membrane-agent-workloads.yaml -f policy/admission/kyverno/membrane-unregistered-agents.yaml
 kubectl wait --for=condition=Ready clusterpolicy/membrane-agent-workloads clusterpolicy/membrane-unregistered-agents --timeout=180s
 
-echo "== 7. Probes"
+step "7. Probes"
 python scripts/live/probes.py --registry "$LIVE/registry" --image-ref "$IMAGE_REF" --out "$LIVE"

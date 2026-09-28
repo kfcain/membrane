@@ -111,6 +111,13 @@ def kubectl(args: list[str], stdin: str | None = None, timeout: int = 120) -> su
     return subprocess.run(["kubectl", *args], input=stdin, capture_output=True, text=True, timeout=timeout)
 
 
+def annotate(level: str, title: str, message: str) -> None:
+    """Emit a GitHub annotation. The public check-runs API can read it."""
+    if __import__("os").environ.get("GITHUB_ACTIONS"):
+        msg = message.replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+        print(f"::{level} title={title}::{msg}", flush=True)
+
+
 def run_admission(cases, out: Path) -> list[dict]:
     results = []
     for probe, expected, obj in cases:
@@ -127,6 +134,8 @@ def run_admission(cases, out: Path) -> list[dict]:
             "reasons": [err[-600:]] if err else [], "pass": observed == expected,
         })
         print(f"{'PASS' if observed == expected else 'FAIL'} {probe:48} expected={expected:8} observed={observed}")
+        annotate("notice" if observed == expected else "error", f"{'PASS' if observed == expected else 'FAIL'} {probe}",
+                 f"expected={expected} observed={observed} {err[-400:]}")
     (out / "admission-objects.json").write_text(json.dumps([o for _, _, o in cases], indent=1))
     return results
 
@@ -181,6 +190,8 @@ def run_egress(reg: dict, image_ref: str, out: Path) -> tuple[list[dict], list[d
             "reasons": [note, (cp.stderr or "").strip()[-300:]], "pass": observed == expected,
         })
         print(f"{'PASS' if observed == expected else 'FAIL'} {probe:48} expected={expected:10} observed={observed}")
+        annotate("notice" if observed == expected else "error", f"{'PASS' if observed == expected else 'FAIL'} {probe}",
+                 f"expected={expected} observed={observed} {(cp.stderr or '').strip()[-300:]}")
     # Known limit (LIMITS.md): an agent with no egress list keeps layer 4 DNS.
     ns = reg["kb-reader"].spec["runtime"]["namespace"]
     cp = kubectl(["exec", "-n", ns, "kb-reader-live", "--", "curl", "-sS", "-o", "/dev/null",
@@ -234,6 +245,9 @@ def main() -> int:
     (out / "probes.json").write_text(json.dumps(payload, indent=1))
     rec = evidence.emit("canary", SOURCE, payload, mode="live", directory=out / "evidence")
     print(f"all_pass={all_pass}; evidence record {rec['id']} in {out / 'evidence'}")
+    annotate("notice", "live known limits", json.dumps(known))
+    annotate("notice" if all_pass else "error", "live probes summary",
+             f"all_pass={all_pass} passed={sum(p['pass'] for p in probes)}/{len(probes)} image={args.image_ref}")
     return 0 if all_pass else 1
 
 
