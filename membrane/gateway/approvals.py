@@ -127,7 +127,9 @@ def approve(approval_id: str, approver: str, ttl: int = DEFAULT_APPROVAL_TTL, *,
         token = issue_approval(approval_id, rec["action_sha256"], approver, exp)
         payload = {"approval_id": approval_id, "action_sha256": rec["action_sha256"],
                    "agent_id": rec["agent_id"], "tool": rec["tool"], "resource": rec["resource"],
-                   "args": rec["args"], "delegator": rec.get("delegator"), "approver": approver, "requested_at": rec["requested_at"],
+                   "args": rec["args"], "delegator": rec.get("delegator"), "approver": approver,
+                   # The reference takes the approver from a CLI flag. Nothing authenticates it.
+                   "approver_authenticated": False, "requested_at": rec["requested_at"],
                    "approved_at": _rfc3339(now), "expires_at": _rfc3339(exp)}
         rec.update(status="approved", approver=approver, approved_at=payload["approved_at"],
                    expires_at=payload["expires_at"])

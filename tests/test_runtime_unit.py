@@ -515,3 +515,17 @@ def test_r23_plain_networkpolicy_has_no_dns_allow_when_cilium_policy_exists(reg)
             assert np_["spec"]["policyTypes"] == ["Egress"]
         else:
             assert 53 in ports, aid
+
+
+# ------------------------------------------------------------------ R-03: approver identity is not authenticated
+
+def test_r03_approval_record_says_approver_not_authenticated(env, capsys):
+    from membrane.cli import main
+    from membrane import evidence as ev
+    rec, h = _pending()
+    assert main(["approve", rec["approval_id"], "--approver", "bob@example.com", "--confirm-action-sha256", h]) == 0
+    err = capsys.readouterr().err
+    assert "not authenticated" in err
+    payload = list(ev.read_all(kinds={"approval"}))[-1]["payload"]
+    assert payload["approver_authenticated"] is False
+    assert "approver" in (REPO_ROOT / "LIMITS.md").read_text().lower().split("## what the check results")[0]

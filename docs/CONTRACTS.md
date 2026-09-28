@@ -152,7 +152,7 @@ Every record has the envelope in `schema/evidence-record.v1.schema.json`: `schem
 - These hashes detect accidental or naive edits. They do not detect a writer that recomputes them. Beacon provides custody. See LIMITS.md.
 
 
-`approval`: `{approval_id, action_sha256, agent_id, tool, resource, args, delegator, approver, requested_at, approved_at, expires_at}`. `args` is the args object that the approver saw. `{agent_id, tool, resource, args}` hashes to `action_sha256`.
+`approval`: `{approval_id, action_sha256, agent_id, tool, resource, args, delegator, approver, approver_authenticated, requested_at, approved_at, expires_at}`. `approver_authenticated` is `false` in the reference, because `--approver` is a CLI flag that nothing authenticates. A production approver service writes `true` only when it binds the approver to an authenticated identity. `args` is the args object that the approver saw. `{agent_id, tool, resource, args}` hashes to `action_sha256`.
 
 Pending approval (state file `<state>/approvals/<id>.json`, not evidence): `{approval_id, action_sha256, agent_id, tool, resource, args, delegator, decision_id, trace_id, requested_at, status}`. `membrane approve` prints agent, tool, resource, delegator, args (canonical JSON), and `action_sha256`. It signs nothing unless `--confirm-action-sha256` equals the stored hash. It also refuses when the stored action no longer hashes to the stored `action_sha256`.
 
