@@ -10,19 +10,7 @@ metadata:
   name: membrane-invoice-reconciler-egress
   namespace: agents-finance
 spec:
-  egress:
-  - ports:
-    - port: 53
-      protocol: UDP
-    - port: 53
-      protocol: TCP
-    to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: kube-system
-      podSelector:
-        matchLabels:
-          k8s-app: kube-dns
+  egress: []
   podSelector:
     matchExpressions:
     - key: membrane.io/quarantine

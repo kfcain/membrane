@@ -55,9 +55,9 @@ The default parent id `spiffe://example.org/spire/agent/k8s_psat/membrane` is a 
 - `endpointSelector` with `matchExpressions`: https://github.com/cilium/cilium/blob/main/Documentation/security/policy/intro.rst (example with `operator: NotIn`).
 - DNS proxy guide: https://github.com/cilium/cilium/blob/main/Documentation/security/dns.rst
 
-Our DNS rule lists each allowed FQDN as a `matchPattern` with no wildcard. The proxy then answers only lookups for allowed names. The upstream examples use `matchPattern: "*"`, which permits every lookup.
+Our DNS rule lists each allowed FQDN as a `matchPattern` with no wildcard. The proxy then answers only lookups for allowed names. This holds only when no other policy allows port 53 to the same peer at layer 4. See the next paragraph. The upstream examples use `matchPattern: "*"`, which permits every lookup.
 
-Kubernetes NetworkPolicy and CiliumNetworkPolicy allows add together. The plain NetworkPolicy allows only DNS. The Cilium policy adds the FQDN allows on TCP 443. Without Cilium only the plain policy applies, so FQDN egress fails closed.
+Kubernetes NetworkPolicy and CiliumNetworkPolicy allows add together. The Cilium layer 7 doc (https://docs.cilium.io/en/stable/security/policy/layer7/) says: "If a layer 4 rule is specified in the policy, and a similar layer 4 rule with layer 7 rules is also specified, then the layer 7 portions of the latter rule will have no effect." A plain NetworkPolicy allow to kube-dns on port 53 is such a layer 4 rule. So for an agent with a Cilium policy, the plain NetworkPolicy allows no egress at all, not even DNS. The Cilium policy adds DNS through the proxy and the FQDN allows on TCP 443. Without Cilium only the plain policy applies, so all egress of that agent fails closed. An agent with no egress list has no Cilium policy. Its plain policy allows DNS to kube-dns at layer 4, so it can look up any name. This interaction was not tested on a cluster.
 
 ## Kubernetes NetworkPolicy
 

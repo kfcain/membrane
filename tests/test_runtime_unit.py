@@ -497,3 +497,21 @@ def test_r04_error_after_the_decision_does_not_write_a_second_record(env, monkey
     status, body = gw.handle_call(b'{"tool":"t"}', None, None)
     assert status == 500 and body["decision"] == "deny"
     assert len(list(evidence.read_all(kinds={"decision"}))) == 1
+
+
+# ------------------------------------------------------------------ R-23: no L4 DNS allow next to the Cilium DNS rule
+
+def test_r23_plain_networkpolicy_has_no_dns_allow_when_cilium_policy_exists(reg):
+    import yaml
+    out = generate(reg)
+    for aid, m in reg.items():
+        if m.spec["runtime"]["type"] != "k8s":
+            continue
+        np_ = yaml.safe_load(out[f"k8s/{aid}.networkpolicy.yaml"])
+        ports = [p.get("port") for rule in np_["spec"].get("egress") or [] for p in rule.get("ports", [])]
+        if f"k8s/{aid}.cilium-egress.yaml" in out:
+            # An L4 allow to port 53 would disable the Cilium DNS name rules.
+            assert np_["spec"].get("egress", []) == [], aid
+            assert np_["spec"]["policyTypes"] == ["Egress"]
+        else:
+            assert 53 in ports, aid

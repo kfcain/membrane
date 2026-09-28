@@ -118,19 +118,30 @@ def _meta(name: str, m: Manifest) -> dict:
             "annotations": {HASH_ANNOTATION: m.sha256}}
 
 
+def has_cilium_policy(m: Manifest) -> bool:
+    return bool(m.spec["egress"])
+
+
 def network_policy(m: Manifest) -> dict:
-    """Deny all egress except DNS to kube-dns. Cilium adds the FQDN allows (policies are additive)."""
+    """Deny all egress. Cilium adds the FQDN allows and the DNS proxy rule (policies are additive).
+
+    An agent with a Cilium policy gets no DNS allow here. A plain layer 4 allow to port 53 on the
+    same peer would make Cilium ignore the layer 7 DNS name rules, so the agent could look up any
+    name. An agent with no egress list (no Cilium policy) keeps a DNS allow to kube-dns."""
+    egress = []
+    if not has_cilium_policy(m):
+        egress = [{
+            "to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}},
+                    "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}}}],
+            "ports": [{"protocol": "UDP", "port": 53}, {"protocol": "TCP", "port": 53}],
+        }]
     return {
         "apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
         "metadata": _meta(f"membrane-{m.id}-egress", m),
         "spec": {
             "podSelector": _agent_selector(m.id),
             "policyTypes": ["Egress"],
-            "egress": [{
-                "to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}},
-                        "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}}}],
-                "ports": [{"protocol": "UDP", "port": 53}, {"protocol": "TCP", "port": 53}],
-            }],
+            "egress": egress,
         },
     }
 
@@ -205,7 +216,7 @@ def generate(reg: dict[str, Manifest], *, parent_id: str = DEFAULT_PARENT_ID,
     for m in _k8s(reg):
         namespaces.add(m.spec["runtime"]["namespace"])
         out[f"k8s/{m.id}.networkpolicy.yaml"] = _yaml(network_policy(m))
-        if m.spec["egress"]:
+        if has_cilium_policy(m):
             out[f"k8s/{m.id}.cilium-egress.yaml"] = _yaml(cilium_egress(m))
     for ns in sorted(namespaces):
         out[f"k8s/quarantine.{ns}.networkpolicy.yaml"] = _yaml(quarantine_policy(ns))

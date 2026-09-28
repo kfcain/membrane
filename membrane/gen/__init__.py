@@ -9,10 +9,12 @@ What it does:
   The operator must create that alias, for example:
   `spire-server entry create -node -spiffeID spiffe://example.org/spire/agent/k8s_psat/membrane -selector k8s_psat:cluster:<cluster>`.
   Use --parent-id to point at another alias or agent ID.
-- Writes, per k8s agent, a Kubernetes NetworkPolicy that denies all egress
-  except DNS to kube-dns, and (when the manifest lists egress) a
-  CiliumNetworkPolicy that allows only those FQDNs on TCP 443, with the DNS
-  proxy rule that FQDN policy needs.
+- Writes, per k8s agent, a Kubernetes NetworkPolicy that denies all egress.
+  When the manifest lists egress, it also writes a CiliumNetworkPolicy that
+  allows only those FQDNs on TCP 443, with the DNS proxy rule that FQDN
+  policy needs. The plain policy then has no DNS allow, because a layer 4
+  allow to port 53 would disable the Cilium DNS name rules. An agent with no
+  egress list keeps a DNS allow to kube-dns in the plain policy.
 - Writes one quarantine NetworkPolicy per agent namespace. The agent policies
   exclude pods labeled membrane.io/quarantine=true, so that label cuts all traffic.
 - Writes the membrane-registry ConfigMap. One key per active agent. The value
@@ -25,7 +27,7 @@ What it does NOT prove:
 - It does not prove that the cluster runs these objects. Only inventory and
   flow evidence from a real cluster can show that.
 - Without Cilium, the FQDN policy does not apply. The plain NetworkPolicy then
-  blocks all non-DNS egress, which fails closed.
+  blocks all egress of an agent with an egress list, which fails closed.
 - It does not prove that pods carry the membrane.io/agent-id label. Admission
   policy (policy/admission) enforces the label.
 - A clean drift check proves only that the committed files match the registry.
