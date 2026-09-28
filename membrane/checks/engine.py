@@ -152,6 +152,9 @@ def evaluate_check(check: Check, records: list[dict], registry: dict, now: datet
     else:
         result["status"] = "PASS"
         result["reason"] = f"0 offending items out of {outcome.examined} examined"
+        if outcome.examined == 0:
+            # A PASS over nothing shows only that no item needed the check. Say so.
+            result["reason"] += " (empty population: no item in the window needed this check)"
     if outcome.notes:
         result["reason"] += "; " + "; ".join(outcome.notes)
     return result

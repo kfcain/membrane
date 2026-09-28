@@ -200,6 +200,8 @@ Check status:
 | STALE | The newest needed record is older than `max_age_hours` |
 | INELIGIBLE | Only `fixture` or `simulated` records exist and the run did not pass `--allow-nonlive` |
 
+A PASS with zero examined items stays PASS. The reason then says "empty population", and the OSCAL observation carries prop `empty-population` = `true`. The report shows the examined count for every check.
+
 Control rollup over the checks mapped to it: MET when every check is PASS. NOT MET when no check is PASS. PARTIAL otherwise. A control with no mapped check does not appear.
 
 A run with `--allow-nonlive` marks every result `"demo": true` and prints a banner. Its output is a demonstration, not an assessment.

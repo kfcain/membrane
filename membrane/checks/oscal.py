@@ -65,6 +65,7 @@ def build(results: dict, results_sha256: str) -> dict:
                 _prop("check-status", c["status"]),
                 _prop("offending-count", len(c["offending"])),
                 _prop("examined-count", c["examined"]),
+                _prop("empty-population", "true" if c["examined"] == 0 else "false"),
                 _prop("demo", "true" if demo else "false"),
             ],
             "methods": ["TEST"],

@@ -403,3 +403,26 @@ def test_r20_tst_01_reason_names_probes_not_run(tmp_path):
     c = _status(tmp_path, sets, "AGT-TST-01")
     assert c["status"] == "PASS"
     assert "1 probe(s) not run: egress_direct_ip" in c["reason"]
+
+
+# R-21: a PASS with zero examined items says so in the reason and in OSCAL.
+
+def test_r21_empty_population_is_visible(tmp_path):
+    sets = fixture_sets()
+    # Keep only reversible executions with a clean allow decision: AC-01 examines nothing.
+    from membrane.checks.evaluators import manifest_irreversible
+    from membrane.manifest import load_registry
+    from _checks_util import REGISTRY
+    reg = load_registry(REGISTRY)
+    sets["tool_exec"] = [r for r in sets["tool_exec"]
+                         if not manifest_irreversible(reg, r["payload"]["agent_id"], r["payload"]["tool"])
+                         and r["payload"]["irreversible"] is False]
+    code, res, out = run(tmp_path, sets)
+    c = check(res, "AGT-AC-01")
+    assert c["status"] == "PASS" and c["examined"] == 0
+    assert "empty population" in c["reason"]
+    import json as _json
+    oscal = _json.loads((out / "assessment-results.oscal.json").read_text())
+    obs = [o for o in oscal["assessment-results"]["results"][0]["observations"]
+           if any(p["name"] == "check-id" and p["value"] == "AGT-AC-01" for p in o.get("props", []))]
+    assert any(p["name"] == "empty-population" and p["value"] == "true" for p in obs[0]["props"])
