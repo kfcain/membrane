@@ -291,7 +291,12 @@ class _Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             length = -1
-        raw = self.rfile.read(length) if 0 <= length <= MAX_BODY else b"<invalid length>"
+        try:
+            raw = self.rfile.read(length) if 0 <= length <= MAX_BODY else b"<invalid length>"
+        except OSError:  # includes socket timeout: the client sent less than Content-Length
+            raw = b"<body read timeout>"
+        if 0 <= length <= MAX_BODY and len(raw) != length:
+            raw = b"<short body>"
         try:
             status, body = self.gateway.handle_call(raw, self.headers.get("Authorization"),
                                                     self.headers.get("traceparent"))
@@ -299,7 +304,10 @@ class _Handler(BaseHTTPRequestHandler):
             print(f"gateway internal error: {exc!r}", file=sys.stderr)
             self._send(500, {"decision": "deny", "reasons": ["gateway_error"]})
             return
-        self._send(status, body, body.get("trace_id"))
+        try:
+            self._send(status, body, body.get("trace_id"))
+        except OSError:
+            pass  # the client left; the decision record is already written
 
 
 def _exact_float(literal: str) -> float:
@@ -359,8 +367,14 @@ def _no_duplicate_keys(pairs):
     return obj
 
 
-def make_server(host: str, port: int, gateway: Gateway | None = None) -> ThreadingHTTPServer:
-    handler = type("GatewayHandler", (_Handler,), {"gateway": gateway or Gateway()})
+READ_TIMEOUT_SECONDS = 10.0
+
+
+def make_server(host: str, port: int, gateway: Gateway | None = None,
+                read_timeout: float = READ_TIMEOUT_SECONDS) -> ThreadingHTTPServer:
+    # `timeout` sets a socket timeout on each connection. A client that sends less body than
+    # its Content-Length then gets a deny (with a decision record) instead of holding a thread.
+    handler = type("GatewayHandler", (_Handler,), {"gateway": gateway or Gateway(), "timeout": read_timeout})
     srv = ThreadingHTTPServer((host, port), handler)
     srv.daemon_threads = True
     return srv

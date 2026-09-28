@@ -542,3 +542,27 @@ def test_r05_gateway_log_escapes_request_fields(env, capsys):
     lines = [x for x in err.splitlines() if x.strip()]
     assert len(lines) == 1, lines
     assert not any(x.startswith("decision allow") for x in lines)
+
+
+# ------------------------------------------------------------------ R-06: short body does not hold a thread forever
+
+def test_r06_short_body_times_out_with_a_deny_record(env):
+    import socket
+    import threading
+    from membrane.gateway.server import make_server
+    gw = Gateway(GatewayConfig(policy_dir=REPO_ROOT / "policy" / "runtime", data_path=env / "nope.json"))
+    srv = make_server("127.0.0.1", 0, gw, read_timeout=1.0)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        s = socket.create_connection(srv.server_address, timeout=10)
+        s.sendall(b"POST /v1/tools/call HTTP/1.1\r\nHost: x\r\nContent-Length: 50\r\n\r\n{}")
+        s.settimeout(8)
+        data = s.recv(4096)
+        s.close()
+        assert b" 403 " in data.split(b"\r\n", 1)[0]
+        recs = list(evidence.read_all(kinds={"decision"}))
+        assert len(recs) == 1 and recs[0]["payload"]["reasons"] == ["policy_error"]
+    finally:
+        srv.shutdown()
+        srv.server_close()
