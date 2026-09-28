@@ -94,15 +94,35 @@ class Gateway:
         self.config = config or GatewayConfig()
         self.backend = backend or MockToolBackend()
         self.limiter = RateLimiter()
+        self._tls = threading.local()
 
     # The whole request path. Returns (http status, response body).
+    # Every call writes exactly one decision record. An unexpected error before the
+    # record gives a deny record with reason gateway_error. An error after the
+    # record does not write a second one.
     def handle_call(self, raw_body: bytes, authorization: str | None, traceparent: str | None) -> tuple[int, dict]:
-        t0 = time.perf_counter()
-        trace_id = parse_traceparent(traceparent)
-        decision_id = str(uuid.uuid4())
-        rec = {"agent_id": None, "manifest_sha256": None, "tier": None, "delegator": None, "tool": None,
-               "irreversible": None, "resource": None, "action_sha256": None, "approval_id": None,
-               "approver": None, "policy_sha256": None, "data_sha256": None}
+        call = {"t0": time.perf_counter(), "trace_id": None, "decision_id": str(uuid.uuid4()),
+                "rec": _empty_rec()}
+        self._tls.written = False
+        try:
+            return self._handle_call(call, raw_body, authorization, traceparent)
+        except Exception as exc:  # noqa: BLE001 - fail closed with a record
+            detail = f"internal error: {exc!r}"[:300]
+            if getattr(self._tls, "written", False):
+                print(f"gateway error after the decision record {call['decision_id']}: {detail}",
+                      file=sys.stderr, flush=True)
+                return 500, {"decision": "deny", "reasons": ["gateway_error"], "decision_id": call["decision_id"],
+                             "trace_id": call["trace_id"], "action_sha256": call["rec"].get("action_sha256")}
+            trace_id = call["trace_id"] or secrets.token_hex(16)
+            return self._finish(500, "deny", ["gateway_error"], call["rec"], call["decision_id"], trace_id,
+                                call["t0"], detail=detail)
+
+    def _handle_call(self, call: dict, raw_body: bytes, authorization: str | None,
+                     traceparent: str | None) -> tuple[int, dict]:
+        t0 = call["t0"]
+        trace_id = call["trace_id"] = parse_traceparent(traceparent)
+        decision_id = call["decision_id"]
+        rec = call["rec"]
 
         # 1. Identity. An invalid token still yields a claimed id for the log.
         verified_claims, claims = None, {}
@@ -175,8 +195,9 @@ class Gateway:
             if isinstance(tool_def, dict):
                 rec["irreversible"] = tool_def.get("irreversible")
             result = evaluate(snap, input_doc, opa_bin=self.config.opa_bin, opa_url=self.config.opa_url)
-        except (PolicyError, ValueError, OSError) as exc:
-            return self._finish(403, "deny", ["policy_error"], rec, decision_id, trace_id, t0, detail=str(exc))
+        except (PolicyError, ValueError, OSError, TypeError, AttributeError, KeyError) as exc:
+            # A data document with the wrong shape is a policy error too.
+            return self._finish(403, "deny", ["policy_error"], rec, decision_id, trace_id, t0, detail=repr(exc))
 
         decision, reasons = result["decision"], result["reasons"]
 
@@ -221,6 +242,7 @@ class Gateway:
         payload = {"decision_id": decision_id, "decision": decision, "reasons": list(reasons), **rec,
                    "latency_ms": round((time.perf_counter() - t0) * 1000.0, 3), "otel": otel}
         evidence.emit("decision", SOURCE, payload, mode="live", agent_id=rec["agent_id"], trace_id=trace_id)
+        self._tls.written = True
         print(f"decision {decision:16} {','.join(reasons):40} agent={rec['agent_id']} tool={rec['tool']} "
               f"trace={trace_id}" + (f" detail={detail}" if detail else ""), file=sys.stderr, flush=True)
         out = {"decision": decision, "reasons": list(reasons), "decision_id": decision_id, "trace_id": trace_id,
@@ -228,6 +250,12 @@ class Gateway:
         if decision == "require_approval":
             out["approval_id"] = rec["approval_id"]
         return status, out
+
+
+def _empty_rec() -> dict:
+    return {"agent_id": None, "manifest_sha256": None, "tier": None, "delegator": None, "tool": None,
+            "irreversible": None, "resource": None, "action_sha256": None, "approval_id": None,
+            "approver": None, "policy_sha256": None, "data_sha256": None}
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -292,12 +320,31 @@ def _reject_constant(name: str):
     raise ValueError(f"non-finite number not allowed: {name}")
 
 
+MAX_DEPTH = 32
+
+
+def _check_depth(obj) -> None:
+    """Reject nesting deeper than MAX_DEPTH. Iterative, so it cannot overflow the stack."""
+    stack = [(obj, 1)]
+    while stack:
+        node, depth = stack.pop()
+        if isinstance(node, (dict, list)):
+            if depth > MAX_DEPTH:
+                raise ValueError(f"JSON nesting deeper than {MAX_DEPTH}")
+            stack.extend((v, depth + 1) for v in (node.values() if isinstance(node, dict) else node))
+
+
 def parse_request_json(raw: bytes):
-    """Parse a request body. Reject duplicate keys, NaN, Infinity, and inexact or out-of-range numbers.
-    The args object that this returns is the object that the action hash covers and that the tool
-    backend receives."""
-    return json.loads(raw, object_pairs_hook=_no_duplicate_keys, parse_float=_exact_float,
-                      parse_constant=_reject_constant)
+    """Parse a request body. Reject duplicate keys, NaN, Infinity, inexact or out-of-range numbers,
+    and nesting deeper than MAX_DEPTH. The args object that this returns is the object that the
+    action hash covers and that the tool backend receives."""
+    try:
+        obj = json.loads(raw, object_pairs_hook=_no_duplicate_keys, parse_float=_exact_float,
+                         parse_constant=_reject_constant)
+    except RecursionError as exc:
+        raise ValueError("JSON nesting too deep") from exc
+    _check_depth(obj)
+    return obj
 
 
 def _no_duplicate_keys(pairs):

@@ -439,3 +439,61 @@ def test_r02_approver_must_be_strict_email(env, approver):
     rec, h = _pending()
     with pytest.raises(approvals.ApprovalError, match="email"):
         approvals.approve(rec["approval_id"], approver, confirm_action_sha256=h)
+
+
+# ------------------------------------------------------------------ R-04: one decision record per POST
+
+def test_r04_deep_nesting_gets_a_deny_record(env):
+    gw = Gateway(GatewayConfig(policy_dir=REPO_ROOT / "policy" / "runtime", data_path=env / "nope.json"))
+    raw = b'{"tool":"kb.search","args":' + b"[" * 100000 + b"]" * 100000 + b"}"
+    status, body = gw.handle_call(raw, None, None)
+    assert status == 403 and body["decision"] == "deny" and body["reasons"] == ["policy_error"]
+    assert len(list(evidence.read_all(kinds={"decision"}))) == 1
+
+
+def test_r04_moderate_nesting_over_limit_is_rejected(env):
+    gw = Gateway(GatewayConfig(policy_dir=REPO_ROOT / "policy" / "runtime", data_path=env / "nope.json"))
+    raw = b'{"tool":"kb.search","args":{"a":' + b"[" * 200 + b"]" * 200 + b"}}"
+    status, body = gw.handle_call(raw, None, None)
+    assert body["reasons"] == ["policy_error"]
+    rec = list(evidence.read_all(kinds={"decision"}))[-1]
+    assert rec["payload"]["action_sha256"] is None
+
+
+def test_r04_bad_data_shape_gets_a_deny_record(env, reg, tmp_path):
+    m = reg["kb-reader"]
+    doc = opa_data(reg)
+    doc["membrane"]["manifests"]["kb-reader"]["tools"] = ["kb.search"]  # a list, not an object
+    data = tmp_path / "data.json"
+    data.write_text(json.dumps(doc))
+    gw = Gateway(GatewayConfig(policy_dir=REPO_ROOT / "policy" / "runtime", data_path=data))
+    tok = tokens.issue_identity(m.id, m.sha256, tokens.spiffe_id_for(m))
+    status, body = _call(gw, tok, {"tool": "kb.search", "resource": "q", "args": {}, "delegator": "a@example.com"})
+    assert status == 403 and body["reasons"] == ["policy_error"]
+    assert len(list(evidence.read_all(kinds={"decision"}))) == 1
+
+
+def test_r04_unexpected_error_gets_a_deny_record(env, monkeypatch):
+    from membrane.gateway import server
+    gw = Gateway(GatewayConfig(policy_dir=REPO_ROOT / "policy" / "runtime", data_path=env / "nope.json"))
+
+    def boom(*a, **k):
+        raise RuntimeError("unexpected")
+    monkeypatch.setattr(server, "parse_traceparent", boom, raising=True)
+    status, body = gw.handle_call(b'{"tool":"t"}', None, None)
+    assert status == 500 and body["decision"] == "deny" and body["reasons"] == ["gateway_error"]
+    recs = list(evidence.read_all(kinds={"decision"}))
+    assert len(recs) == 1 and recs[0]["payload"]["reasons"] == ["gateway_error"]
+
+
+def test_r04_error_after_the_decision_does_not_write_a_second_record(env, monkeypatch):
+    gw = Gateway(GatewayConfig(policy_dir=REPO_ROOT / "policy" / "runtime", data_path=env / "nope.json"))
+    orig = gw._finish
+
+    def finish_then_fail(*a, **k):
+        orig(*a, **k)
+        raise RuntimeError("after the record")
+    monkeypatch.setattr(gw, "_finish", finish_then_fail)
+    status, body = gw.handle_call(b'{"tool":"t"}', None, None)
+    assert status == 500 and body["decision"] == "deny"
+    assert len(list(evidence.read_all(kinds={"decision"}))) == 1

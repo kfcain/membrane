@@ -84,6 +84,7 @@ Action hash. `action_sha256` is the SHA-256 of `canonical_json({agent_id, tool, 
 - `NaN`, `Infinity`, or `-Infinity`: `deny`, `policy_error`.
 - A number with a fraction or exponent that is not finite as a 64-bit float, or that does not denote exactly the decimal value of the float's shortest form (for example `0.100000000000000000009`): `deny`, `policy_error`.
 - Integers stay exact integers. `10` and `10.0` hash differently.
+- Nesting deeper than 32 levels (objects and arrays): `deny`, `policy_error`.
 
 The parsed `args` object is the object that the hash covers and that the tool backend receives.
 
@@ -110,6 +111,8 @@ Decision rules, in order. The first rule that matches wins.
 11. Otherwise `allow`, reason `within_manifest`. Override mode `throttled` adds reason `throttled`; the gateway applies the rate limit.
 
 Fail-closed defaults in the policy: a missing `requires_delegator` counts as true. A tool with no `irreversible` flag counts as irreversible. A missing `approval_required_for` counts as `["all"]`. A missing or empty `input.action_sha256` never matches an approval. Any evaluation error gives `deny` with reason `policy_error`.
+
+Every POST to `/v1/tools/call` writes exactly one `decision` record. A data document with the wrong shape is a `policy_error` deny. Any other unexpected error before the record gives HTTP 500 and a `deny` record with reason `gateway_error`. An error after the record (for example in the tool backend) gives HTTP 500 and a `deny` response, and writes no second record.
 
 Rate limits are enforced in the gateway, not in OPA. A rate-limit rejection is a `deny` with reason `rate_limited`, logged the same way.
 
