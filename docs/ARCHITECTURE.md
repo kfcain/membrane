@@ -83,7 +83,7 @@ flowchart LR
   B --> W["Beacon witness chain"]
 ```
 
-The engine checks each record's payload hash when it reads it. A bad hash stops the run with exit code 2. A record with mode `fixture` or `simulated` counts only when the run passes `--allow-nonlive`. That run is marked as a demonstration everywhere it writes.
+The engine checks each record's payload hash and record hash when it reads it. The record hash covers the envelope (`mode`, `collected_at`, `kind`, `agent_id`, `source`, `id`). The same record id with different content in two evidence dirs also stops the run. A bad hash stops the run with exit code 2. A record with mode `fixture` or `simulated` counts only when the run passes `--allow-nonlive`. That run is marked as a demonstration everywhere it writes.
 
 ## Contracts
 

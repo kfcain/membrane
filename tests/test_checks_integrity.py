@@ -76,3 +76,48 @@ def test_contract_shape_error_is_input_error(tmp_path):
     rehash(sets["egress_flow"][0])
     code, _, _ = run(tmp_path, sets)
     assert code == 2
+
+
+# R-16: record_sha256 covers the whole envelope, not only the payload.
+
+def test_envelope_mode_edit_is_detected(tmp_path):
+    sets = fixture_sets()
+    sets["inventory"][0]["mode"] = "fixture"  # a valid mode, but no rehash
+    code, res, _ = run(tmp_path, sets)
+    assert code == 2 and res is None
+
+
+def test_envelope_collected_at_edit_is_detected(tmp_path):
+    sets = fixture_sets()
+    sets["canary"][0]["collected_at"] = "2026-09-27T12:30:00.000Z"  # no rehash
+    code, res, _ = run(tmp_path, sets)
+    assert code == 2 and res is None
+
+
+def test_missing_record_sha256_is_detected(tmp_path):
+    sets = fixture_sets()
+    sets["canary"][0].pop("record_sha256", None)
+    sets["canary"][0]["source"] = "edited"
+    code, res, _ = run(tmp_path, sets)
+    assert code == 2 and res is None
+
+
+def test_same_id_different_envelope_across_dirs(tmp_path):
+    from _checks_util import rehash
+    a = write_sets(tmp_path / "a", fixture_sets())
+    sets = fixture_sets()
+    sets["canary"][0]["collected_at"] = "2026-09-27T12:59:00.000Z"
+    rehash(sets["canary"][0])  # a writer that recomputes every hash
+    b = write_sets(tmp_path / "b", {"canary": sets["canary"]})
+    code, _, _ = run(tmp_path, evidence=[str(a), str(b)])
+    assert code == 2
+    code, _, _ = run(tmp_path, evidence=[str(b), str(a)], name="rev")
+    assert code == 2
+
+
+def test_make_record_writes_verifiable_record_sha256(tmp_path):
+    from membrane import evidence
+    rec = evidence.make_record("canary", "t", {"run_id": "x"}, mode="simulated")
+    assert rec["record_sha256"] == evidence.record_sha256(rec)
+    evidence.append(rec, directory=tmp_path)
+    assert [r["id"] for r in evidence.read_all(tmp_path)] == [rec["id"]]

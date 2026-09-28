@@ -53,9 +53,8 @@ def uid(*parts: str) -> str:
 
 
 def rec(kind: str, key: str, payload: dict, at: str, *, mode: str = "live", agent_id: str | None = None) -> dict:
-    r = make_record(kind, f"test-fixture:{kind}", payload, mode=mode, agent_id=agent_id, collected_at=at)
-    r["id"] = uid("record", kind, key)
-    return r
+    return make_record(kind, f"test-fixture:{kind}", payload, mode=mode, agent_id=agent_id, collected_at=at,
+                       record_id=uid("record", kind, key))
 
 
 def action_hash(agent_id: str, tool: str, resource: str, args: dict) -> str:

@@ -12,9 +12,9 @@ Status logic follows docs/CONTRACTS.md section 7. The order is fixed:
 Records with collected_at after --now do not exist for the run. The engine
 lists them under ignored_future_records.
 
-Integrity: every record passes membrane.evidence.read_all (payload hash)
-and the evidence-record.v1 envelope schema. The same record id with two
-different payload hashes is an error. Any error stops the run.
+Integrity: every record passes membrane.evidence.read_all (payload hash and
+record hash) and the evidence-record.v1 envelope schema. The same record id
+with two different record hashes, in any dir, is an error. Any error stops the run.
 """
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ def load_evidence(dirs: list[Path]) -> list[LoadedRecord]:
                 raise EvidenceError(f"{d}: record {rec['id']}: {exc}") from exc
             prior = by_id.get(rec["id"])
             if prior is not None:
-                if prior.record["payload_sha256"] != rec["payload_sha256"] or prior.record["kind"] != rec["kind"]:
+                if prior.record["record_sha256"] != rec["record_sha256"]:
                     raise EvidenceError(f"record id {rec['id']} appears twice with different content")
                 continue
             by_id[rec["id"]] = LoadedRecord(rec, str(d))

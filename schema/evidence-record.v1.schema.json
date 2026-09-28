@@ -4,7 +4,7 @@
   "title": "Membrane evidence record v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "id", "kind", "source", "mode", "collected_at", "agent_id", "trace_id", "payload", "payload_sha256"],
+  "required": ["schema", "id", "kind", "source", "mode", "collected_at", "agent_id", "trace_id", "payload", "payload_sha256", "record_sha256"],
   "properties": {
     "schema": { "const": "membrane.evidence.v1" },
     "id": { "type": "string", "format": "uuid" },
@@ -15,6 +15,7 @@
     "agent_id": { "type": ["string", "null"] },
     "trace_id": { "type": ["string", "null"], "pattern": "^[0-9a-f]{32}$" },
     "payload": { "type": "object" },
-    "payload_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+    "payload_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "record_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 of the canonical JSON of the whole record without this field" }
   }
 }

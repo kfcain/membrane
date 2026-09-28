@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from _checks_util import check, fixture_sets, run
+from _checks_util import check, fixture_sets, rehash, run
 
 from membrane.checks import execute
 from membrane.manifest import REPO_ROOT
@@ -14,6 +14,7 @@ def _set_mode(sets, kinds, mode):
     for k in kinds:
         for r in sets.get(k, []):
             r["mode"] = mode
+            rehash(r)
 
 
 def test_no_evidence_when_kind_missing(tmp_path):
@@ -86,6 +87,7 @@ def test_stale_uses_newest_eligible_record(tmp_path):
     fresh["id"] = "00000000-0000-4000-8000-000000000001"
     fresh["mode"] = "fixture"
     fresh["collected_at"] = "2026-09-28T11:00:00.000Z"
+    rehash(fresh)
     sets["inventory"].append(fresh)
     _, res, _ = run(tmp_path, sets, now="2026-09-28T12:00:00Z")
     assert check(res, "AGT-INV-01")["status"] == "STALE"

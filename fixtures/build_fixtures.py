@@ -49,9 +49,9 @@ def rid(*parts: str) -> str:
 
 def record(kind: str, payload: dict, at: timedelta, key: str, agent_id: str | None = None,
            source: str = SOURCE) -> dict:
-    rec = make_record(kind, source, payload, mode="fixture", agent_id=agent_id, collected_at=ts(at))
-    rec["id"] = rid(kind, key)  # deterministic; the id is not part of the payload hash
-    return rec
+    # Deterministic id. record_sha256 covers the id, so make_record takes it.
+    return make_record(kind, source, payload, mode="fixture", agent_id=agent_id, collected_at=ts(at),
+                       record_id=rid(kind, key))
 
 
 def write(kind: str, records: list[dict], out: Path = OUT) -> Path:

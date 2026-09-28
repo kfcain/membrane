@@ -126,6 +126,7 @@ def test_au_01_ineligible_decision_is_a_finding(tmp_path):
     sets = fixture_sets()
     for d in sets["decision"]:
         d["mode"] = "simulated"
+        rehash(d)
     c = _status(tmp_path, sets, "AGT-AU-01")
     assert c["status"] == "FAIL"
     assert "decision_ineligible" in {o["reason"] for o in c["offending"]}
@@ -230,6 +231,7 @@ def test_tst_01_newest_wins_and_fail(tmp_path):
     sets = fixture_sets()
     sets["canary"] = [r for r in sets["canary"] if r["payload"]["all_pass"] is False]
     sets["canary"][0]["collected_at"] = "2026-09-27T12:30:00.000Z"
+    rehash(sets["canary"][0])
     c = _status(tmp_path / "f", sets, "AGT-TST-01")
     assert c["status"] == "FAIL"
     assert c["offending"][0]["probe"] == "canary_irreversible"

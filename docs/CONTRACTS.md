@@ -122,7 +122,17 @@ The gateway adds three rules that can only make a decision stricter. An approval
 
 The record envelope carries `trace_id` (32 lowercase hex) and `agent_id`. The OpenTelemetry GenAI attribute names were verified against the semantic conventions. See `docs/SOURCES.md`.
 
-## 5. Other evidence payloads
+## 5. Evidence envelope and other payloads
+
+Every record has the envelope in `schema/evidence-record.v1.schema.json`: `schema`, `id`, `kind`, `source`, `mode`, `collected_at`, `agent_id`, `trace_id`, `payload`, `payload_sha256`, `record_sha256`.
+
+- `payload_sha256` is the SHA-256 of the canonical JSON of `payload`.
+- `record_sha256` is the SHA-256 of the canonical JSON of the whole record without the `record_sha256` field. It covers every envelope field and `payload_sha256`.
+- Writers use `membrane.evidence.make_record()` (or `seal()` after a deliberate rebuild). A deterministic id goes in through `record_id`, because the id is under the hash.
+- `read_all()` recomputes both hashes. A mismatch or a missing hash is an error. The check engine stops with exit code 2.
+- The same `id` in two evidence dirs with a different `record_sha256` is an error (exit 2). An identical copy is read once.
+- These hashes detect accidental or naive edits. They do not detect a writer that recomputes them. Beacon provides custody. See LIMITS.md.
+
 
 `approval`: `{approval_id, action_sha256, agent_id, tool, resource, approver, requested_at, approved_at, expires_at}`
 

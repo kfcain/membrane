@@ -28,4 +28,4 @@ Membrane is a reference. It shows a design and gives working parts that you can 
 
 ## Custody
 
-Membrane writes append-only JSONL files and checks payload hashes when it reads them. That detects accidental change. It does not stop a person with write access from rewriting a file. Beacon provides custody: signed witness records, checkpoints, and fail-closed claim words. Send membrane results to Beacon with the plugin in `integrations/beacon/`. The Beacon status word stays unverified.
+Membrane writes append-only JSONL files. Each record carries two hashes: `payload_sha256` over the payload and `record_sha256` over the whole record, envelope included. The reader checks both and stops on a mismatch or a missing hash. These hashes detect an accidental edit or a naive edit that does not recompute them. They do not detect a writer that recomputes the hashes. Such a writer can change `mode`, `collected_at`, or any other field without detection. Beacon provides custody: signed witness records, checkpoints, and fail-closed claim words. Send membrane results to Beacon with the plugin in `integrations/beacon/`. The Beacon status word stays unverified.

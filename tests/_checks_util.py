@@ -36,8 +36,9 @@ def fixture_sets() -> dict[str, list[dict]]:
 
 
 def rehash(rec: dict) -> dict:
-    rec["payload_sha256"] = sha256_hex(canonical_json(rec["payload"]))
-    return rec
+    """Recompute payload_sha256 and record_sha256, as a writer that edits a record would."""
+    from membrane.evidence import seal
+    return seal(rec)
 
 
 def write_sets(directory: Path, sets: dict[str, list[dict]]) -> Path:

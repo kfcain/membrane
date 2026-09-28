@@ -8,6 +8,12 @@ Rules:
   produce a PASS in the check engine unless the operator passes the
   explicit demo flag. See docs/CONTRACTS.md.
 - payload_sha256 is the SHA-256 of the canonical JSON of payload.
+- record_sha256 is the SHA-256 of the canonical JSON of the whole record
+  without the record_sha256 field. It covers the envelope (id, kind, source,
+  mode, collected_at, agent_id, trace_id) and payload_sha256.
+- read_all verifies both hashes and fails closed on a mismatch or absence.
+  The hashes detect accidental or naive edits. They do not stop a writer
+  that recomputes the hashes. Beacon provides custody.
 - Writers never rewrite or delete a line.
 """
 from __future__ import annotations
@@ -47,15 +53,28 @@ def now_rfc3339() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+def record_sha256(record: dict) -> str:
+    """SHA-256 of the canonical JSON of the record without its record_sha256 field."""
+    return sha256_hex(canonical_json({k: v for k, v in record.items() if k != "record_sha256"}))
+
+
+def seal(record: dict) -> dict:
+    """Set payload_sha256 and record_sha256 from the current content. Writers only."""
+    record["payload_sha256"] = sha256_hex(canonical_json(record["payload"]))
+    record["record_sha256"] = record_sha256(record)
+    return record
+
+
 def make_record(kind: str, source: str, payload: dict, *, mode: str, agent_id: str | None = None,
-                trace_id: str | None = None, collected_at: str | None = None) -> dict:
+                trace_id: str | None = None, collected_at: str | None = None,
+                record_id: str | None = None) -> dict:
     if kind not in KINDS:
         raise ValueError(f"unknown evidence kind {kind!r}")
     if mode not in MODES:
         raise ValueError(f"unknown mode {mode!r}")
-    return {
+    return seal({
         "schema": SCHEMA,
-        "id": str(uuid.uuid4()),
+        "id": record_id or str(uuid.uuid4()),
         "kind": kind,
         "source": source,
         "mode": mode,
@@ -63,8 +82,7 @@ def make_record(kind: str, source: str, payload: dict, *, mode: str, agent_id: s
         "agent_id": agent_id,
         "trace_id": trace_id,
         "payload": payload,
-        "payload_sha256": sha256_hex(canonical_json(payload)),
-    }
+    })
 
 
 def append(record: dict, filename: str | None = None, directory: Path | None = None) -> Path:
@@ -85,7 +103,7 @@ def emit(kind: str, source: str, payload: dict, *, mode: str, **kw: Any) -> dict
 
 
 def read_all(directory: Path | None = None, kinds: set[str] | None = None) -> Iterator[dict]:
-    """Yield every record in every *.jsonl file. Verify payload hashes; fail closed."""
+    """Yield every record in every *.jsonl file. Verify both hashes; fail closed."""
     directory = Path(directory or evidence_dir())
     if not directory.exists():
         return
@@ -98,5 +116,9 @@ def read_all(directory: Path | None = None, kinds: set[str] | None = None) -> It
                 raise ValueError(f"{path}:{n}: unexpected schema {rec.get('schema')!r}")
             if sha256_hex(canonical_json(rec["payload"])) != rec["payload_sha256"]:
                 raise ValueError(f"{path}:{n}: payload_sha256 mismatch (record {rec['id']})")
+            if not isinstance(rec.get("record_sha256"), str):
+                raise ValueError(f"{path}:{n}: record_sha256 missing (record {rec.get('id')})")
+            if record_sha256(rec) != rec["record_sha256"]:
+                raise ValueError(f"{path}:{n}: record_sha256 mismatch (record {rec.get('id')})")
             if kinds is None or rec["kind"] in kinds:
                 yield rec
