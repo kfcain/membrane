@@ -105,18 +105,19 @@ class MembranePlugin:
             "source": "membrane",
             "mode": mode,
             "status": "unverified",
-            "note": ("Membrane check results. Membrane words (PASS, FAIL, MET, NOT MET) are not Beacon claim "
-                     "words. The status stays unverified."),
+            "note": ("Membrane check results. Check words (PASS, FAIL) and rollup tokens are not Beacon "
+                     "claim words. The status stays unverified."),
             "results_path": str(path),
             "results_sha256": hashlib.sha256(raw).hexdigest(),
             "run_id": run.get("run_id"),
             "assessed_at": run.get("assessed_at"),
             "demo": demo,
             "allow_nonlive": bool(run.get("allow_nonlive")),
-            "summary": results.get("summary"),
+            "summary": _neutral_summary(results.get("summary")),
             "checks": [{"id": c.get("id"), "status": c.get("status"), "offending": len(c.get("offending") or []),
                         "examined": c.get("examined"), "record_ids": c.get("record_ids")} for c in checks],
-            "controls": {fw: [{"control_id": r.get("control_id"), "status": r.get("status")} for r in rows]
+            "controls": {fw: [{"control_id": r.get("control_id"), "status": ROLLUP_TOKENS[r.get("status")]}
+                              for r in rows]
                          for fw, rows in (results.get("controls") or {}).items()},
             "inputs": [{"id": i.get("id"), "kind": i.get("kind"), "mode": i.get("mode"),
                         "payload_sha256": i.get("payload_sha256")} for i in results.get("inputs") or []],
@@ -129,6 +130,20 @@ class MembranePlugin:
             payload=payload,
             scf_targets=(ctx.target,) if ctx.target else self.spec.scf_targets,
         )
+
+
+# Control words become neutral tokens in the payload. Beacon's claim-word guard is
+# case-sensitive, and a lower-cased "NOT MET" contains " met".
+ROLLUP_TOKENS = {"MET": "rollup_all_pass", "PARTIAL": "rollup_some_pass", "NOT MET": "rollup_none_pass"}
+
+
+def _neutral_summary(summary):
+    if not isinstance(summary, dict):
+        return None
+    controls = summary.get("controls") or {}
+    return {"checks": summary.get("checks"),
+            "controls": {fw: {ROLLUP_TOKENS.get(k, "unknown"): v for k, v in (counts or {}).items()}
+                         for fw, counts in controls.items()}}
 
 
 PLUGIN = MembranePlugin()

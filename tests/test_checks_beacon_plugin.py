@@ -83,3 +83,18 @@ def test_unknown_status_word_fails(tmp_path, monkeypatch, plugin_mod):
     monkeypatch.setenv("MEMBRANE_RESULTS_PATH", str(p))
     r = plugin_mod.PLUGIN.collect(spec.CollectContext(live=True))
     assert r.ok is False and r.mode == "live_failed"
+
+
+def test_r26_payload_has_no_claim_word_in_any_case(tmp_path, monkeypatch, plugin_mod):
+    """R-26: Beacon's claim-word guard is case-sensitive. The payload must pass it in lower case too."""
+    spec = _beacon_spec()
+    for name, nonlive in (("demo", True), ("strict", False)):
+        _, _, out = run(tmp_path / name, allow_nonlive=nonlive, name=name)
+        monkeypatch.setenv("MEMBRANE_RESULTS_PATH", str(out / "results.json"))
+        r = plugin_mod.PLUGIN.collect(spec.CollectContext(live=None))
+        assert r.ok
+        text = json.dumps(r.payload).lower()
+        for word in ("compliant", "evidenced", "proven", "implemented", " met", '"met"', "met\""):
+            assert word not in text, (name, word)
+        statuses = {c["status"] for rows in r.payload["controls"].values() for c in rows}
+        assert statuses <= {"rollup_all_pass", "rollup_some_pass", "rollup_none_pass"}

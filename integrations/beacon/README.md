@@ -6,7 +6,7 @@ The plugin reads membrane's `results.json` and returns one observation. Beacon s
 
 ## What the plugin does not do
 
-- It does not map membrane words to Beacon claim words. The payload `status` is always `unverified`.
+- It does not map membrane words to Beacon claim words. The payload `status` is always `unverified`. Control rollups appear as neutral tokens: `rollup_all_pass` (MET), `rollup_some_pass` (PARTIAL), `rollup_none_pass` (NOT MET). Beacon's claim-word guard is case-sensitive, and a lower-cased "NOT MET" would contain " met".
 - A membrane PASS or MET is not a Beacon claim. Only Beacon `decide_claim` with a linked receipt can permit a claim word.
 - It does not run the checks. Run `membrane checks run` first.
 
