@@ -274,3 +274,12 @@ def test_runtime_gateway_fails_closed_bad_body(env):
     assert status == 403 and body["reasons"] == ["policy_error"]
     rec = next(evidence.read_all(kinds={"decision"}))
     assert rec["payload"]["tool"] is None and rec["payload"]["action_sha256"] is None
+
+
+def test_duplicate_json_keys_rejected():
+    import pytest
+    from membrane.gateway.server import _no_duplicate_keys
+    import json
+    with pytest.raises(ValueError):
+        json.loads('{"tool":"a","tool":"b"}', object_pairs_hook=_no_duplicate_keys)
+    assert json.loads('{"tool":"a"}', object_pairs_hook=_no_duplicate_keys) == {"tool": "a"}

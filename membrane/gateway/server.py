@@ -122,7 +122,7 @@ class Gateway:
 
         # 2. Request body.
         try:
-            body = json.loads(raw_body or b"")
+            body = json.loads(raw_body or b"", object_pairs_hook=_no_duplicate_keys)
             if not isinstance(body, dict):
                 raise ValueError("body must be a JSON object")
             tool = body.get("tool")
@@ -264,6 +264,16 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(500, {"decision": "deny", "reasons": ["gateway_error"]})
             return
         self._send(status, body, body.get("trace_id"))
+
+
+def _no_duplicate_keys(pairs):
+    """Reject JSON objects with a repeated key. Parsers disagree on which value wins."""
+    obj = {}
+    for key, value in pairs:
+        if key in obj:
+            raise ValueError(f"duplicate JSON key: {key!r}")
+        obj[key] = value
+    return obj
 
 
 def make_server(host: str, port: int, gateway: Gateway | None = None) -> ThreadingHTTPServer:
