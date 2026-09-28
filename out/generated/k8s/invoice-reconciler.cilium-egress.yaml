@@ -22,7 +22,13 @@ spec:
       rules:
         dns:
         - matchPattern: api.vendor-bank.example.com
+        - matchPattern: api.vendor-bank.example.com.agents-finance.svc.cluster.local
+        - matchPattern: api.vendor-bank.example.com.cluster.local
+        - matchPattern: api.vendor-bank.example.com.svc.cluster.local
         - matchPattern: erp.internal.example.com
+        - matchPattern: erp.internal.example.com.agents-finance.svc.cluster.local
+        - matchPattern: erp.internal.example.com.cluster.local
+        - matchPattern: erp.internal.example.com.svc.cluster.local
   - toFQDNs:
     - matchName: api.vendor-bank.example.com
     - matchName: erp.internal.example.com

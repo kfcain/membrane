@@ -22,7 +22,13 @@ spec:
       rules:
         dns:
         - matchPattern: files.pythonhosted.org
+        - matchPattern: files.pythonhosted.org.agents-sandbox.svc.cluster.local
+        - matchPattern: files.pythonhosted.org.cluster.local
+        - matchPattern: files.pythonhosted.org.svc.cluster.local
         - matchPattern: pypi.org
+        - matchPattern: pypi.org.agents-sandbox.svc.cluster.local
+        - matchPattern: pypi.org.cluster.local
+        - matchPattern: pypi.org.svc.cluster.local
   - toFQDNs:
     - matchName: files.pythonhosted.org
     - matchName: pypi.org

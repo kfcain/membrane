@@ -58,6 +58,10 @@ for m in load_registry("var/live/registry").values():
         subprocess.run(["kubectl", "create", "serviceaccount", rt["service_account"], "-n", rt["namespace"]], check=True)
 # A second account in agents-finance for the wrong-service-account probe.
 subprocess.run(["kubectl", "create", "serviceaccount", "not-the-agent", "-n", "agents-finance"], check=True)
+# A decoy account with the agent's name in another agent namespace. Without it,
+# the built-in service account check rejects the wrong-namespace probe before
+# the request reaches Kyverno, and the probe tests nothing.
+subprocess.run(["kubectl", "create", "serviceaccount", "invoice-reconciler", "-n", "agents"], check=True)
 PY
 kubectl apply -f "$LIVE/generated/k8s/"
 

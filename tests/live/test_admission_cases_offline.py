@@ -76,3 +76,21 @@ def test_classify_never_maps_errors_to_pass_states():
     assert probes.classify(6) == "dns_denied"
     assert probes.classify(28) == "blocked"
     assert probes.classify(127).startswith("curl_exit_")
+
+
+def test_cilium_dns_rule_allows_search_list_forms():
+    """Regression for the first live run: example.com did not resolve because
+    the search-list forms were refused by the DNS proxy."""
+    from membrane.gen.generate import cilium_egress
+    from membrane.manifest import load_registry
+    m = load_registry()["invoice-reconciler"]
+    dns = cilium_egress(m)["spec"]["egress"][0]["toPorts"][0]["rules"]["dns"]
+    names = {d["matchPattern"] for d in dns}
+    for n in m.spec["egress"]:
+        assert n in names
+        assert f"{n}.agents-finance.svc.cluster.local" in names
+        assert f"{n}.svc.cluster.local" in names
+        assert f"{n}.cluster.local" in names
+    # toFQDNs must stay limited to the manifest names.
+    fq = {f.get("matchName") or f.get("matchPattern") for f in cilium_egress(m)["spec"]["egress"][1]["toFQDNs"]}
+    assert fq == set(m.spec["egress"])
