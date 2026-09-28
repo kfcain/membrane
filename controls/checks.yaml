@@ -108,7 +108,9 @@ checks:
     max_age_hours: 24
     target: >-
       Zero irreversible tool_exec records in the window lack an approval record with the same approval_id
-      and the same action_sha256 that did not expire before the execution time.
+      and the same action_sha256 that did not expire before the execution time. The registry manifest
+      decides irreversibility for the agent and tool. An unknown agent or tool, or a missing flag, counts
+      as irreversible. A tool_exec irreversible flag that differs from the manifest is also a finding.
     remediation: >-
       Block irreversible tools in the gateway until a verified approval token for the exact action hash is present, and review each listed execution with its owner.
     controls:

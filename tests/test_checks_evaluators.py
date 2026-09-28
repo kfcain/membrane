@@ -135,8 +135,10 @@ def test_au_01_ineligible_decision_is_a_finding(tmp_path):
 def test_ac_01_fail_reasons(tmp_path):
     c = _status(tmp_path, fixture_sets(), "AGT-AC-01")
     assert c["status"] == "FAIL"
-    assert sorted(o["reason"] for o in c["offending"]) == ["approval_hash_mismatch", "approval_missing"]
-    assert all(o["tool"] in {"erp.post_adjustment", "email.send_vendor_notice"} for o in c["offending"])
+    # kb.delete is not in the kb-reader manifest, so it counts as irreversible (R-17).
+    assert sorted((o["tool"], o["reason"]) for o in c["offending"]) == [
+        ("email.send_vendor_notice", "approval_missing"), ("erp.post_adjustment", "approval_hash_mismatch"),
+        ("kb.delete", "approval_missing"), ("kb.delete", "irreversible_flag_mismatch")]
 
 
 def test_ac_01_pass(tmp_path):
@@ -262,3 +264,29 @@ def test_ir_01_inconsistent_sla_flag_is_fail(tmp_path):
     d["payload"]["seconds_to_denial"] = 31.0  # within_sla still says true
     rehash(d)
     assert _status(tmp_path, sets, "AGT-IR-01")["status"] == "FAIL"
+
+
+# R-17: irreversibility comes from the registry manifest, not from the tool_exec record.
+
+def test_r17_ac_01_uses_manifest_irreversible_flag(tmp_path):
+    sets = fixture_sets()
+    # e4: email.send_vendor_notice is irreversible in the manifest. The backend says false.
+    e = next(r for r in sets["tool_exec"] if r["payload"]["tool"] == "email.send_vendor_notice")
+    e["payload"]["irreversible"] = False
+    rehash(e)
+    c = _status(tmp_path, sets, "AGT-AC-01")
+    got = {(o["exec_id"], o["reason"]) for o in c["offending"]}
+    assert (e["payload"]["exec_id"], "approval_missing") in got
+    assert (e["payload"]["exec_id"], "irreversible_flag_mismatch") in got
+
+
+def test_r17_ac_01_unknown_tool_or_missing_flag_counts_as_irreversible(tmp_path):
+    sets = fixture_sets()
+    e = next(r for r in sets["tool_exec"] if r["payload"]["tool"] == "kb.search"
+             and r["payload"]["approval_id"] is None)
+    e["payload"]["tool"] = "kb.unknown_tool"
+    e["payload"].pop("irreversible")
+    rehash(e)
+    c = _status(tmp_path, sets, "AGT-AC-01")
+    got = {(o["exec_id"], o["reason"]) for o in c["offending"]}
+    assert (e["payload"]["exec_id"], "approval_missing") in got

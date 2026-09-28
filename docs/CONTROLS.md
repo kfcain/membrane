@@ -121,7 +121,7 @@ ISO/IEC 42001 Annex A ids are not in this file. The standard text is not public,
 ### AGT-AC-01 Irreversible actions have a bound approval
 
 - Question: Does every executed irreversible action have a human approval bound to the same action hash?
-- Target: Zero irreversible tool_exec records in the window lack an approval record with the same approval_id and the same action_sha256 that did not expire before the execution time.
+- Target: Zero irreversible tool_exec records in the window lack an approval record with the same approval_id and the same action_sha256 that did not expire before the execution time. The registry manifest decides irreversibility for the agent and tool. An unknown agent or tool, or a missing flag, counts as irreversible. A tool_exec irreversible flag that differs from the manifest is also a finding.
 - Evidence kinds: tool_exec
 - Supporting kinds: approval
 - Max age: 24 hours

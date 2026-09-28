@@ -186,28 +186,49 @@ def agt_au_01(ctx: EvalContext) -> Outcome:
     return out
 
 
+def manifest_irreversible(registry: dict, agent_id, tool) -> bool:
+    """Irreversibility from the registry manifest. An unknown agent, an unknown tool, or a
+    missing or non-boolean flag counts as irreversible (fail closed)."""
+    m = registry.get(agent_id)
+    if m is None:
+        return True
+    for t in m.spec.get("tools", []):
+        if t.get("name") == tool:
+            return t.get("irreversible") is not False
+    return True
+
+
 def agt_ac_01(ctx: EvalContext) -> Outcome:
-    execs = [r for r in ctx.window["tool_exec"] if r["payload"]["irreversible"] is True]
     approvals: dict[str, dict] = {}
     for a in ctx.eligible.get("approval", []):
         approvals.setdefault(a["payload"]["approval_id"], a)
-    out = Outcome(examined=len(execs), record_ids=[r["id"] for r in execs])
-    for r in execs:
+    out = Outcome(examined=0, record_ids=[])
+    for r in ctx.window["tool_exec"]:
         e = r["payload"]
+        want = manifest_irreversible(ctx.registry, e.get("agent_id"), e.get("tool"))
+        flag = e.get("irreversible")
+        reasons = []
+        if flag is not want:
+            # The tool backend wrote a flag that differs from the manifest (or no flag).
+            reasons.append("irreversible_flag_mismatch")
+        if not want and not reasons:
+            continue
+        out.examined += 1
+        out.record_ids.append(r["id"])
         aid = e.get("approval_id")
-        reason = None
-        if not aid:
-            reason = "approval_missing"
-        elif aid not in approvals:
-            reason = "approval_not_found"
-        else:
-            ap = approvals[aid]["payload"]
-            out.record_ids.append(approvals[aid]["id"])
-            if ap["action_sha256"] != e["action_sha256"]:
-                reason = "approval_hash_mismatch"
-            elif ap.get("expires_at") and parse_time(ap["expires_at"]) < parse_time(e["executed_at"]):
-                reason = "approval_expired"
-        if reason:
+        if want:
+            if not aid:
+                reasons.append("approval_missing")
+            elif aid not in approvals:
+                reasons.append("approval_not_found")
+            else:
+                ap = approvals[aid]["payload"]
+                out.record_ids.append(approvals[aid]["id"])
+                if ap["action_sha256"] != e["action_sha256"]:
+                    reasons.append("approval_hash_mismatch")
+                elif ap.get("expires_at") and parse_time(ap["expires_at"]) < parse_time(e["executed_at"]):
+                    reasons.append("approval_expired")
+        for reason in reasons:
             out.offending.append({
                 "exec_id": e["exec_id"], "agent_id": e["agent_id"], "tool": e["tool"],
                 "resource": e.get("resource"), "action_sha256": e["action_sha256"],
