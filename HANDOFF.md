@@ -66,6 +66,26 @@ These are the owner's rules. Keep them.
 
 ## 6. Open next steps (after the review)
 
+### 6.0 Work split (set 2026-09-28)
+
+Two agents work in parallel. Each one owns its files. Do not edit files that the other agent owns. If you must change a shared file, make a small, separate commit and say why in the message.
+
+| Item | Owner | Branch | Files the owner changes | State |
+| --- | --- | --- | --- | --- |
+| 4. Source evidence custody | **Codex** | `codex/source-evidence-custody` | `integrations/beacon/`, `membrane/evidence.py` (sealing hooks only), custody tests, `LIMITS.md` custody section, `docs/CONTRACTS.md` custody text | IN PROGRESS. The branch exists only in the Codex workspace. It is not on GitHub. It has 20 tests and no implementation yet. Codex finishes it, pushes the branch, and merges to `main` when `make test` is green. |
+| 1. Live cluster validation | **Claude** | `claude/live-cluster` | `.github/workflows/live-cluster.yml`, `scripts/live/`, `tests/live/`, `LIMITS.md` cluster lines, this table | IN PROGRESS. Runs on GitHub-hosted runners, because neither sandbox can pull the kind node image. |
+| 3. Real tool backend | Unassigned | | | Next after items 1 and 4 |
+| 2. SPIFFE identity | Unassigned | | | Last. Can reuse the item 1 kind cluster |
+
+Rules for this split:
+
+- **Custody belongs to Codex.** Claude does not implement custody, and does not change `integrations/beacon/` or the sealing parts of `membrane/evidence.py`.
+- **Evidence API is frozen.** The live-cluster work writes evidence only through the existing `membrane.evidence.emit()` API. If Codex changes that API, Codex keeps it backward compatible, or updates `scripts/live/` in the same commit.
+- **Shared files.** Both agents may need `LIMITS.md` and `docs/CONTRACTS.md`. Edit only your own section. Rebase on `main` before you push.
+- **Status.** When an item finishes, the owner sets its state here to DONE and names the merge commit.
+
+### 6.1 Item details
+
 1. **Kind cluster test.** Run a kind cluster with Cilium. Apply `out/generated/k8s/*` and `policy/admission/kyverno/*`. Then run the egress canary probes, which are listed as not run today. Add a DNS probe: an agent with a Cilium policy must fail to resolve a name outside its egress list (R-23). Also apply the admission policies and try the R-15 test pod (wrong namespace, service account, tier, and image digest) against the live webhook.
 2. **Identity.** Replace the dev HMAC identity with SPIFFE SVIDs over mTLS. The token fields already match the SPIFFE ID shape.
 3. **Real tool backend.** Add a real tool backend adapter that writes `tool_exec` records with mode `live`.
