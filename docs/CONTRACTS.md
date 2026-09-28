@@ -104,7 +104,7 @@ Decision rules, in order. The first rule that matches wins.
 4. Manifest status is not `active`: `deny`, `agent_not_active`.
 5. Override mode `killed` or `quarantined`: `deny`, `override_killed` or `override_quarantined`. An override with an unknown or missing mode, or an entry that is not an object (including `false`, `null`, or `0`): `deny`, `override_unknown`. An overrides document that exists and is not an object: `deny`, `override_unknown` for every agent. The gateway passes each entry of `overrides.json` to OPA as it is, so a bad entry denies only that agent. An `overrides.json` that does not parse or is not a JSON object gives `deny`, `policy_error` for every call.
 6. Tool not in the manifest: `deny`, `tool_not_in_manifest`.
-7. `requires_delegator` is true and `delegator` is empty, white space, or null: `deny`, `delegator_required`.
+7. `requires_delegator` is true and `delegator` is not a strict email address (null, empty, white space, padded, or any other string): `deny`, `delegator_required`.
 8. Agent is a canary and the tool is irreversible: `deny`, `canary_irreversible_forbidden`.
 9. An approval object is present and it is not valid for this `action_sha256` (`verified` false, other hash, or malformed): `deny`, `approval_mismatch`. This rule comes before rule 10 so that a replayed approval never opens a new approval request.
 10. Approval is needed and no valid approval matches this `action_sha256`: `require_approval`, `approval_required`. Approval is needed when the tool is irreversible and `approval_required_for` has `irreversible`, or when `approval_required_for` has `all`, or when the override mode is `restricted`.

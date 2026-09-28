@@ -196,6 +196,13 @@ test_r7_missing_delegator if is(eval(object.remove(base, ["delegator"])), "deny"
 
 test_r7_not_required if is(eval(triager), "allow", ["within_manifest"])
 
+# R-14: a delegator must name a person by email address.
+test_r7_non_email_delegator if is(eval(object.union(base, {"delegator": "x"})), "deny", ["delegator_required"])
+
+test_r7_padded_delegator if is(eval(object.union(base, {"delegator": " alice@example.com"})), "deny", ["delegator_required"])
+
+test_r7_newline_delegator if is(eval(object.union(base, {"delegator": "alice@example.com\n"})), "deny", ["delegator_required"])
+
 test_r7_missing_flag_fails_closed if {
 	req := object.union(base, {"agent_id": "sparse-agent", "manifest_sha256": "h-sp", "tool": "x.do", "delegator": null})
 	is(eval(req), "deny", ["delegator_required"])

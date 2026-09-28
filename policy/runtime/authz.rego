@@ -102,6 +102,13 @@ overrides_malformed if {
 	not is_object(o)
 }
 
+# The same strict form as the gateway: one "@", a dot in the domain, no white
+# space, and no control characters.
+delegator_email(s) if {
+	is_string(s)
+	regex.match(`^[^@\s\x00-\x1f\x7f]+@[^@\s\x00-\x1f\x7f]+\.[^@\s\x00-\x1f\x7f]+$`, s)
+}
+
 non_empty_string(s) if {
 	is_string(s)
 	trim_space(s) != ""
@@ -166,7 +173,7 @@ default delegator_required := false
 
 delegator_required if {
 	requires_delegator
-	not non_empty_string(object.get(input, "delegator", null))
+	not delegator_email(object.get(input, "delegator", null))
 }
 
 # Tool irreversibility. Fail closed: no boolean flag means irreversible.
