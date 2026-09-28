@@ -222,3 +222,24 @@ A run with `--allow-nonlive` marks every result `"demo": true` and prints a bann
 | `membrane checks doc` | checks |
 
 Every command returns 0 on success and a non-zero code on failure. Every command that makes evidence says the file path it wrote.
+
+## 9. Source evidence custody
+
+The `membrane.evidence` Beacon plugin retains all top-level `*.jsonl` files in the selected source directories. `membrane.evidence.snapshot_bundle(directories)` builds the payload. The existing `emit()`, `append()`, and `read_all()` APIs keep their behavior. Source collection writes no new membrane evidence record.
+
+`MEMBRANE_EVIDENCE_DIRS` is a nonempty JSON list of absolute directory paths. If absent, use `MEMBRANE_EVIDENCE_DIR` or the default evidence directory. Do not read paths from an untrusted assessment payload. Each selected directory must exist and contain at least one JSONL file.
+
+Bundle schema: `membrane.source-bundle.v1`. Fields:
+
+- `source_directories`: sorted, resolved source paths.
+- `file_count`, `total_bytes`, `unique_record_count`, `record_modes`.
+- `artifacts`: sorted by full path. Each artifact has `name`, `source_path`, `size_bytes`, `sha256`, `content_utf8`, and `records`.
+- Each entry in `records` has `id`, `kind`, `mode`, `payload_sha256`, and `record_sha256`.
+
+`content_utf8.encode("utf-8")` must equal the source file bytes. The file hash covers those bytes. Each record must pass the evidence envelope schema and both hash checks. Conflicting content for one record id stops collection. Identical copies remain in each source file, and count once in `unique_record_count`.
+
+Collection fails as one unit on missing, unreadable, empty, or incomplete files, invalid JSON, duplicate keys, invalid envelopes, bad hashes, symlinks, special files, and observed source changes. Each file must end with a newline. Limits are 256 files and 16 MiB of total source bytes. A limit gives an error. It never truncates the bundle. Use closed log segments. Change detection is not a filesystem transaction.
+
+The plugin returns status `unverified` and no SCF targets. If all records have mode `live`, the observation has mode `live`, unless Beacon forces fixtures. Any fixture or simulated record makes the whole observation mode `fixture`, with `demo: true` and a demonstration note. Record modes stay unchanged. A failed live read returns `ok: false`, `mode: live_failed`, and no bundle. A failed forced fixture read returns `ok: false`, `mode: fixture`, and no bundle.
+
+Beacon seals the complete observation and checkpoints it. The plugin does not sign files itself. Raw source text is data, not an assessment or a claim. Later writes need another collection. Custody does not detect records that were omitted before collection. Check results and source bundles have no automatic receipt link yet.
