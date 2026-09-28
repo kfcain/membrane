@@ -308,8 +308,8 @@ test_tier4_redteam_at_limit_no_warn if {
 	not has_warn(doc, "red team is")
 }
 
-test_tier4_redteam_future_warns if {
-	has_warn(patched(tier4, [{"op": "replace", "path": "/spec/redteam/date", "value": "2027-01-01"}]), "in the future")
+test_tier4_redteam_future_denies if {
+	has_deny(patched(tier4, [{"op": "replace", "path": "/spec/redteam/date", "value": "2099-01-01"}]), "in the future")
 }
 
 test_tier4_promotion if {

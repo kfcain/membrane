@@ -423,7 +423,7 @@ warn contains sprintf("%s: tier 4 red team is %d days old (limit %d); schedule a
 	age > redteam_warn_age_days
 }
 
-warn contains sprintf("%s: tier 4 redteam.date %s is in the future", [agent_id, spec.redteam.date]) if {
+deny contains sprintf("%s: tier 4 redteam.date %s is in the future", [agent_id, spec.redteam.date]) if {
 	tier == 4
 	redteam_ns > time.now_ns()
 }

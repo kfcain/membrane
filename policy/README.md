@@ -44,10 +44,10 @@ Rules by tier:
 | 1 | No tool scope ends in `:write` or `:admin`. No irreversible tool. `egress` is empty. |
 | 2 and above | `evals` with `min_pass` at or above 0.90 (tier 2), 0.95 (tier 3), 0.97 (tier 4). `aibom` with `format` and `ref`. Each tool has `rate_limit_per_min`. |
 | 3 and above | No `egress` entry contains `*`. Each entry is a lowercase FQDN. An empty list is allowed. If a tool is irreversible, `approval.required_for` contains `irreversible` or `all`. `delegation.requires_delegator` is true. |
-| 4 | `sandbox` has `isolated: true`, `standing_credentials: false`, `session_recording: true`. `redteam` has `ref` and a valid `date`. `promotion.approvers` has 2 or more distinct entries after trim and lower-case. Each entry is a plain ASCII email address. No approver is the owner. The list is a claim; see LIMITS.md. |
+| 4 | `sandbox` has `isolated: true`, `standing_credentials: false`, `session_recording: true`. `redteam` has `ref` and a valid `date` that is not in the future. `promotion.approvers` has 2 or more distinct entries after trim and lower-case. Each entry is a plain ASCII email address. No approver is the owner. The list is a claim; see LIMITS.md. |
 | Canary | No irreversible tool. `approval.required_for` contains `all`. Tier is 2. |
 
-Warnings: a tier 4 red team older than 180 days, a red team date in the future, an `:admin` scope at tier 2 and above, a wildcard egress entry at tier 2, a `lambda` or `saas` runtime, and an agent with no tools. The red team age uses `time.now_ns()`. The unit tests replace the clock with a fixed value.
+Warnings: a tier 4 red team older than 180 days, an `:admin` scope at tier 2 and above, a wildcard egress entry at tier 2, a `lambda` or `saas` runtime, and an agent with no tools. The red team age uses `time.now_ns()`. The unit tests replace the clock with a fixed value.
 
 The CI gate does not check that the file name equals `metadata.id`. `membrane/manifest.py` checks that.
 
