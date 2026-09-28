@@ -134,8 +134,8 @@ def run_admission(cases, out: Path) -> list[dict]:
             "reasons": [err[-600:]] if err else [], "pass": observed == expected,
         })
         print(f"{'PASS' if observed == expected else 'FAIL'} {probe:48} expected={expected:8} observed={observed}")
-        annotate("notice" if observed == expected else "error", f"{'PASS' if observed == expected else 'FAIL'} {probe}",
-                 f"expected={expected} observed={observed} {err[-400:]}")
+        if observed != expected:
+            annotate("error", f"FAIL {probe}", f"expected={expected} observed={observed} {err[-400:]}")
     (out / "admission-objects.json").write_text(json.dumps([o for _, _, o in cases], indent=1))
     return results
 
@@ -190,8 +190,8 @@ def run_egress(reg: dict, image_ref: str, out: Path) -> tuple[list[dict], list[d
             "reasons": [note, (cp.stderr or "").strip()[-300:]], "pass": observed == expected,
         })
         print(f"{'PASS' if observed == expected else 'FAIL'} {probe:48} expected={expected:10} observed={observed}")
-        annotate("notice" if observed == expected else "error", f"{'PASS' if observed == expected else 'FAIL'} {probe}",
-                 f"expected={expected} observed={observed} {(cp.stderr or '').strip()[-300:]}")
+        if observed != expected:
+            annotate("error", f"FAIL {probe}", f"expected={expected} observed={observed} {(cp.stderr or '').strip()[-300:]}")
     diagnose_dns(reg)
     # Known limit (LIMITS.md): an agent with no egress list keeps layer 4 DNS.
     ns = reg["kb-reader"].spec["runtime"]["namespace"]
@@ -271,7 +271,10 @@ def main() -> int:
     (out / "probes.json").write_text(json.dumps(payload, indent=1))
     rec = evidence.emit("canary", SOURCE, payload, mode="live", directory=out / "evidence")
     print(f"all_pass={all_pass}; evidence record {rec['id']} in {out / 'evidence'}")
-    annotate("notice", "live known limits", json.dumps(known))
+    # One annotation with every probe, so the public API shows all results.
+    table = "\n".join(f"{'PASS' if p['pass'] else 'FAIL'} {p['probe']} expected={p['expected']} observed={p['observed']}"
+                       for p in probes)
+    annotate("warning", "live probes table", table + "\nknown_limits=" + json.dumps(known))
     annotate("notice" if all_pass else "error", "live probes summary",
              f"all_pass={all_pass} passed={sum(p['pass'] for p in probes)}/{len(probes)} image={args.image_ref}")
     return 0 if all_pass else 1
