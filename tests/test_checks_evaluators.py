@@ -322,3 +322,51 @@ def test_r18_reused_decision_and_approval_are_findings(tmp_path):
     for e in [good] + clones:
         assert (e["payload"]["exec_id"], "decision_reused") in au
         assert (e["payload"]["exec_id"], "approval_reused") in ac
+
+
+# R-19: the approval must come before the execution, and the allow decision must name it.
+
+def _good_ac_exec(sets):
+    for r in sets["tool_exec"]:
+        e = r["payload"]
+        for a in sets["approval"]:
+            if a["payload"]["approval_id"] == e["approval_id"] and a["payload"]["action_sha256"] == e["action_sha256"]:
+                return r, a
+    raise AssertionError("fixture has no good approved exec")
+
+
+def test_r19_approval_after_execution_is_a_finding(tmp_path):
+    sets = fixture_sets()
+    e, a = _good_ac_exec(sets)
+    e["payload"]["executed_at"] = "2026-09-27T07:00:00.000Z"
+    rehash(e)
+    a["payload"]["approved_at"] = "2026-09-27T11:00:00.000Z"
+    rehash(a)
+    c = _status(tmp_path, sets, "AGT-AC-01")
+    assert (e["payload"]["exec_id"], "approval_time_order") in {(o["exec_id"], o["reason"]) for o in c["offending"]}
+
+
+def test_r19_missing_approval_time_is_a_finding(tmp_path):
+    sets = fixture_sets()
+    e, a = _good_ac_exec(sets)
+    a["payload"].pop("approved_at")
+    rehash(a)
+    c = _status(tmp_path, sets, "AGT-AC-01")
+    assert (e["payload"]["exec_id"], "approval_time_order") in {(o["exec_id"], o["reason"]) for o in c["offending"]}
+
+
+def test_r19_decision_must_name_the_same_approval(tmp_path):
+    sets = fixture_sets()
+    e, _ = _good_ac_exec(sets)
+    d = next(r for r in sets["decision"] if r["payload"]["decision_id"] == e["payload"]["decision_id"])
+    d["payload"]["approval_id"] = None
+    rehash(d)
+    c = _status(tmp_path, sets, "AGT-AC-01")
+    assert (e["payload"]["exec_id"], "approval_not_in_decision") in {(o["exec_id"], o["reason"]) for o in c["offending"]}
+
+
+def test_r19_good_exec_passes_time_and_decision_checks(tmp_path):
+    sets = fixture_sets()
+    e, _ = _good_ac_exec(sets)
+    c = _status(tmp_path, sets, "AGT-AC-01")
+    assert e["payload"]["exec_id"] not in {o["exec_id"] for o in c["offending"]}

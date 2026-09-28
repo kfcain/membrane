@@ -34,7 +34,7 @@ ISO/IEC 42001 Annex A ids are not in this file. The standard text is not public,
 | AGT-IAM-01 | No model-provider credentials outside the vault | secret_scan | 24 | IA-5, IA-5(7) | IAC-14.3_A01, CFG-17.2_A04 |
 | AGT-IAM-02 | One identity per agent | inventory | 24 | IA-4, IA-9 | IAC-36_A02, AAT-39.19_A01 |
 | AGT-AU-01 | Every tool execution has an allow decision | tool_exec (+ decision) | 24 | AU-2, AU-12, AC-3 | AAT-39.3_A03, AAT-40.1_A01 |
-| AGT-AC-01 | Irreversible actions have a bound approval | tool_exec (+ approval) | 24 | AC-3, AC-3(2) | AAT-36.12_A01, AAT-36.12_A02, AAT-39_A03 |
+| AGT-AC-01 | Irreversible actions have a bound approval | tool_exec (+ approval, decision) | 24 | AC-3, AC-3(2) | AAT-36.12_A01, AAT-36.12_A02, AAT-39_A03 |
 | AGT-AC-02 | Delegator present where the manifest requires one | decision | 24 | AC-3, IA-2 | IAC-32_A03, AAT-39.19_A01 |
 | AGT-SC-01 | Egress stays inside the manifest list | egress_flow | 24 | SC-7, SC-7(5), AC-4 | AAT-39.2_A02, AAT-39.11_A02, NET-04_A03 |
 | AGT-CM-01 | Deploys pass every gate | pipeline_run | 720 | CM-3, CM-3(2), SA-11 | CHG-07_A01, AAT-28.5_A01, AAT-28.10_A02 |
@@ -121,9 +121,9 @@ ISO/IEC 42001 Annex A ids are not in this file. The standard text is not public,
 ### AGT-AC-01 Irreversible actions have a bound approval
 
 - Question: Does every executed irreversible action have a human approval bound to the same action hash?
-- Target: Zero irreversible tool_exec records in the window lack an approval record with the same approval_id and the same action_sha256 that did not expire before the execution time. The registry manifest decides irreversibility for the agent and tool. An unknown agent or tool, or a missing flag, counts as irreversible. A tool_exec irreversible flag that differs from the manifest is also a finding. An approval_id that more than one tool_exec record names is also a finding.
+- Target: Zero irreversible tool_exec records in the window lack an approval record with the same approval_id and the same action_sha256 that did not expire before the execution time. The registry manifest decides irreversibility for the agent and tool. An unknown agent or tool, or a missing flag, counts as irreversible. A tool_exec irreversible flag that differs from the manifest is also a finding. An approval_id that more than one tool_exec record names is also a finding. The approval times must follow requested_at, approved_at, executed_at, expires_at in that order, and the allow decision named by the execution must name the same approval_id.
 - Evidence kinds: tool_exec
-- Supporting kinds: approval
+- Supporting kinds: approval, decision
 - Max age: 24 hours
 - Remediation on FAIL: Block irreversible tools in the gateway until a verified approval token for the exact action hash is present, and review each listed execution with its owner.
 - NIST SP 800-53 Rev 5: AC-3, AC-3(2)

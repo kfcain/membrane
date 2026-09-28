@@ -105,14 +105,16 @@ checks:
     title: Irreversible actions have a bound approval
     question: Does every executed irreversible action have a human approval bound to the same action hash?
     evidence_kinds: [tool_exec]
-    supporting_kinds: [approval]
+    supporting_kinds: [approval, decision]
     max_age_hours: 24
     target: >-
       Zero irreversible tool_exec records in the window lack an approval record with the same approval_id
       and the same action_sha256 that did not expire before the execution time. The registry manifest
       decides irreversibility for the agent and tool. An unknown agent or tool, or a missing flag, counts
       as irreversible. A tool_exec irreversible flag that differs from the manifest is also a finding.
-      An approval_id that more than one tool_exec record names is also a finding.
+      An approval_id that more than one tool_exec record names is also a finding. The approval times must
+      follow requested_at, approved_at, executed_at, expires_at in that order, and the allow decision
+      named by the execution must name the same approval_id.
     remediation: >-
       Block irreversible tools in the gateway until a verified approval token for the exact action hash is present, and review each listed execution with its owner.
     controls:

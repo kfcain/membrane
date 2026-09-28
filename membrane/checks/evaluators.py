@@ -212,11 +212,21 @@ def manifest_irreversible(registry: dict, agent_id, tool) -> bool:
     return True
 
 
+def _approval_time_order_ok(ap: dict, e: dict) -> bool:
+    try:
+        seq = [parse_time(ap["requested_at"]), parse_time(ap["approved_at"]),
+               parse_time(e["executed_at"]), parse_time(ap["expires_at"])]
+    except (KeyError, TypeError, ValueError):
+        return False
+    return all(a <= b for a, b in zip(seq, seq[1:]))
+
+
 def agt_ac_01(ctx: EvalContext) -> Outcome:
     approvals: dict[str, dict] = {}
     for a in ctx.eligible.get("approval", []):
         approvals.setdefault(a["payload"]["approval_id"], a)
     uses = _reuse_counts(ctx, "approval_id")
+    decisions = _decisions_by_id(ctx.eligible.get("decision", []))
     out = Outcome(examined=0, record_ids=[])
     for r in ctx.window["tool_exec"]:
         e = r["payload"]
@@ -243,6 +253,15 @@ def agt_ac_01(ctx: EvalContext) -> Outcome:
                     reasons.append("approval_hash_mismatch")
                 elif ap.get("expires_at") and parse_time(ap["expires_at"]) < parse_time(e["executed_at"]):
                     reasons.append("approval_expired")
+                if not _approval_time_order_ok(ap, e):
+                    # Need requested_at <= approved_at <= executed_at <= expires_at, all present.
+                    reasons.append("approval_time_order")
+                d = decisions.get(e.get("decision_id"))
+                if d is None or d["payload"].get("approval_id") != aid:
+                    # The allow decision for this execution must name the same approval.
+                    reasons.append("approval_not_in_decision")
+                else:
+                    out.record_ids.append(d["id"])
         if aid and uses.get(aid, 0) > 1:
             # An approval is single use. More than one execution names it.
             reasons.append("approval_reused")
