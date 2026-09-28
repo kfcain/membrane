@@ -15,7 +15,7 @@
       "required": ["id", "owner", "description"],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$" },
-        "owner": { "type": "string", "format": "email" },
+        "owner": { "type": "string", "format": "email", "pattern": "^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,}$" },
         "description": { "type": "string", "minLength": 1 },
         "labels": { "type": "object", "additionalProperties": { "type": "string" } }
       }
@@ -125,7 +125,7 @@
           "additionalProperties": false,
           "required": ["approvers"],
           "properties": {
-            "approvers": { "type": "array", "items": { "type": "string", "format": "email" } }
+            "approvers": { "type": "array", "items": { "type": "string", "format": "email", "pattern": "^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,}$" } }
           }
         }
       }

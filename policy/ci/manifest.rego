@@ -365,7 +365,22 @@ promotion_approvers := a if {
 	is_array(a)
 } else := []
 
-distinct_approvers := {lower(a) | some a in promotion_approvers; is_string(a)}
+# One person, one entry: trim white space and lower-case before the distinct
+# count and the owner compare. Each entry must be a plain ASCII email address.
+norm_person(a) := lower(trim_space(a))
+
+plain_email(a) if {
+	is_string(a)
+	regex.match(`^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$`, trim_space(a))
+}
+
+distinct_approvers := {norm_person(a) | some a in promotion_approvers; is_string(a)}
+
+deny contains sprintf("%s: tier 4 promotion approver %v must be a plain email address", [agent_id, a]) if {
+	tier == 4
+	some a in promotion_approvers
+	not plain_email(a)
+}
 
 deny contains sprintf("%s: tier 4 promotion.approvers needs at least 2 distinct entries (got %d)", [agent_id, count(distinct_approvers)]) if {
 	tier == 4
@@ -375,7 +390,7 @@ deny contains sprintf("%s: tier 4 promotion.approvers needs at least 2 distinct 
 deny contains sprintf("%s: tier 4 promotion approver %q must not be the owner", [agent_id, a]) if {
 	tier == 4
 	some a in distinct_approvers
-	a == lower(owner)
+	a == norm_person(owner)
 }
 
 # ---------------------------------------------------------------------------

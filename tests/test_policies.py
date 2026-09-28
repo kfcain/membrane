@@ -205,3 +205,18 @@ def test_kyverno_suite():
     assert "Excluded" not in out, out
     m = re.search(r"Test Summary: (\d+) tests passed and 0 tests failed", out)
     assert m and int(m.group(1)) > 0, out
+
+
+def test_r11_schema_rejects_padded_or_loose_approver_emails(tmp_path):
+    """R-11: `membrane validate` rejects approver and owner values that are not plain emails."""
+    import yaml
+    from membrane.manifest import ManifestError, load_registry
+    src = yaml.safe_load((REPO / "registry" / "agents" / "code-runner.yaml").read_text())
+    for bad in (["platform-ai@example.com ", " Platform-AI@example.com"], ["a@example.com", "b@example"]):
+        d = tmp_path / str(abs(hash(tuple(bad))))
+        d.mkdir()
+        doc = json.loads(json.dumps(src))
+        doc["spec"]["promotion"]["approvers"] = bad
+        (d / "code-runner.yaml").write_text(yaml.safe_dump(doc))
+        with pytest.raises(ManifestError):
+            load_registry(d)

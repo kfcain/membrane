@@ -21,7 +21,7 @@ Read in this order:
 | Area | State |
 | --- | --- |
 | Manifest schema and example registry (5 agents) | Done |
-| CI policy (conftest), runtime authz (OPA), admission (Kyverno and Rego) | Done. 170 Rego tests, 108 Kyverno rows |
+| CI policy (conftest), runtime authz (OPA), admission (Kyverno and Rego) | Done. 171 Rego tests, 108 Kyverno rows |
 | Generators and drift check | Done. Not applied to a real cluster |
 | Reference gateway, approvals, canary, response playbook, kill drill | Done. Dev HMAC identity, mock tool backend |
 | Check engine, OSCAL 1.1.3 output, POA&M candidates, report | Done. OSCAL validates against the vendored NIST schema |

@@ -320,6 +320,17 @@ test_tier4_promotion if {
 	has_deny(patched(tier4, [{"op": "replace", "path": "/spec/promotion/approvers", "value": ["a@example.com", "Owner@Example.com"]}]), "must not be the owner")
 }
 
+# R-11: white space and case tricks do not make two approvers out of one person.
+test_tier4_promotion_normalized if {
+	has_deny(patched(tier4, [{"op": "replace", "path": "/spec/promotion/approvers", "value": ["owner@example.com ", " Owner@example.com"]}]), "at least 2 distinct")
+	has_deny(patched(tier4, [{"op": "replace", "path": "/spec/promotion/approvers", "value": ["a@example.com", " owner@example.com"]}]), "must not be the owner")
+	has_deny(patched(tier4, [{"op": "replace", "path": "/spec/promotion/approvers", "value": ["a@example.com ", " A@example.com"]}]), "at least 2 distinct")
+	has_deny(patched(tier4, [{"op": "replace", "path": "/spec/promotion/approvers", "value": ["a@example.com", "b@example"]}]), "must be a plain email address")
+	has_deny(patched(tier4, [{"op": "replace", "path": "/spec/promotion/approvers", "value": ["a@example.com", "b @example.com"]}]), "must be a plain email address")
+	has_deny(patched(tier4, [{"op": "replace", "path": "/spec/promotion/approvers", "value": ["a@example.com", 5]}]), "must be a plain email address")
+	not has_deny(tier4, "must be a plain email address")
+}
+
 # ---- canary ---------------------------------------------------------------
 
 test_canary_irreversible if {
