@@ -212,6 +212,32 @@ test_r8_canary_irreversible_even_with_approval if {
 	is(eval(req), "deny", ["canary_irreversible_forbidden"])
 }
 
+# R-10: a missing or non-boolean canary flag counts as a canary (fail closed).
+eval_m(req, m) := r if {
+	r := authz.result with input as req with data.membrane.manifests as m
+}
+
+test_r8_missing_canary_flag_counts_as_canary if {
+	m := json.patch(manifests, [
+		{"op": "remove", "path": "/invoice-reconciler/canary"},
+		{"op": "replace", "path": "/invoice-reconciler/approval_required_for", "value": []},
+	])
+	is(eval_m(irrev, m), "deny", ["canary_irreversible_forbidden"])
+}
+
+test_r8_string_canary_flag_counts_as_canary if {
+	m := json.patch(manifests, [
+		{"op": "replace", "path": "/invoice-reconciler/canary", "value": "true"},
+		{"op": "replace", "path": "/invoice-reconciler/approval_required_for", "value": []},
+	])
+	is(eval_m(irrev, m), "deny", ["canary_irreversible_forbidden"])
+}
+
+test_r8_false_canary_flag_is_not_canary if {
+	m := json.patch(manifests, [{"op": "replace", "path": "/invoice-reconciler/approval_required_for", "value": []}])
+	is(eval_m(irrev, m), "allow", ["within_manifest"])
+}
+
 test_r8_canary_reversible_needs_approval if is(eval(canary_req), "require_approval", ["approval_required"])
 
 test_r8_canary_reversible_with_approval if {
@@ -263,10 +289,21 @@ test_r9_empty_list_needs_no_approval_for_irreversible if {
 }
 
 test_r9_missing_irreversible_flag_fails_closed if {
-	m := json.patch(manifests, [{"op": "add", "path": "/sparse-agent/requires_delegator", "value": false}])
+	m := json.patch(manifests, [
+		{"op": "add", "path": "/sparse-agent/requires_delegator", "value": false},
+		{"op": "add", "path": "/sparse-agent/canary", "value": false},
+	])
 	req := object.union(base, {"agent_id": "sparse-agent", "manifest_sha256": "h-sp", "tool": "x.do"})
 	r := authz.result with input as req with data.membrane.manifests as m
 	is(r, "require_approval", ["approval_required"])
+}
+
+# With no canary flag either, the sparse agent counts as a canary (R-10).
+test_r9_sparse_agent_without_canary_flag_is_a_canary if {
+	m := json.patch(manifests, [{"op": "add", "path": "/sparse-agent/requires_delegator", "value": false}])
+	req := object.union(base, {"agent_id": "sparse-agent", "manifest_sha256": "h-sp", "tool": "x.do"})
+	r := authz.result with input as req with data.membrane.manifests as m
+	is(r, "deny", ["canary_irreversible_forbidden"])
 }
 
 test_mismatch_beats_approval_required if {

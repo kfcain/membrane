@@ -178,9 +178,12 @@ tool_irreversible := false if tool.irreversible == false
 default canary_irreversible := false
 
 canary_irreversible if {
-	manifest.canary == true
+	is_canary
 	tool_irreversible
 }
+
+# Fail closed: only an explicit boolean false makes an agent a non-canary.
+is_canary if not manifest.canary == false
 
 # Rule 10. Fail closed: no approval_required_for list means approval for all.
 approval_required_for := r if {

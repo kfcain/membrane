@@ -110,7 +110,7 @@ Decision rules, in order. The first rule that matches wins.
 10. Approval is needed and no valid approval matches this `action_sha256`: `require_approval`, `approval_required`. Approval is needed when the tool is irreversible and `approval_required_for` has `irreversible`, or when `approval_required_for` has `all`, or when the override mode is `restricted`.
 11. Otherwise `allow`, reason `within_manifest`. Override mode `throttled` adds reason `throttled`; the gateway applies the rate limit.
 
-Fail-closed defaults in the policy: a missing `requires_delegator` counts as true. A tool with no `irreversible` flag counts as irreversible. A missing `approval_required_for` counts as `["all"]`. A missing or empty `input.action_sha256` never matches an approval. Any evaluation error gives `deny` with reason `policy_error`.
+Fail-closed defaults in the policy: a missing `requires_delegator` counts as true. A missing or non-boolean `canary` counts as true. A tool with no `irreversible` flag counts as irreversible. A missing `approval_required_for` counts as `["all"]`. A missing or empty `input.action_sha256` never matches an approval. Any evaluation error gives `deny` with reason `policy_error`.
 
 Every POST to `/v1/tools/call` writes exactly one `decision` record. A data document with the wrong shape is a `policy_error` deny. Any other unexpected error before the record gives HTTP 500 and a `deny` record with reason `gateway_error`. An error after the record (for example in the tool backend) gives HTTP 500 and a `deny` response, and writes no second record.
 
