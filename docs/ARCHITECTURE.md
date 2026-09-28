@@ -55,7 +55,7 @@ sequenceDiagram
   G-->>A: 200
 ```
 
-The approval token names one action hash. A token for action A cannot approve action B. The policy denies a mismatched approval with `approval_mismatch`. It does not open a new approval request, so a replay cannot turn into a fresh request that a person approves by habit.
+The approval token names one action hash. The gateway rejects duplicate keys and inexact or non-finite numbers before it computes the hash, so one hash covers one sent action. Then a token for action A cannot approve action B. The policy denies a mismatched approval with `approval_mismatch`. It does not open a new approval request, so a replay cannot turn into a fresh request that a person approves by habit.
 
 ## Response steps
 

@@ -34,7 +34,7 @@ flowchart LR
 3. **Generators build all enforcement config from the manifests:** OPA data, SPIRE registration entries, a per-agent egress NetworkPolicy, a namespace-wide egress default-deny for every agent namespace, Cilium FQDN egress policy, and the registry ConfigMap. `membrane gen --check` fails when the committed config differs from the manifests.
 4. **Admission control** rejects agent pods that are not registered, whose manifest hash differs, or whose image is not pinned by digest.
 5. **The tool gateway asks OPA on every call.** The answer is allow, deny, or require approval. An approval token is bound to the hash of one exact action and works once. Every decision becomes an evidence record with a trace id.
-6. **Canary probes** try forbidden actions on a schedule. Each denial is proof that a gate works. Proof that a gate operates is stronger than a configuration screenshot.
+6. **Canary probes** try forbidden actions on a schedule. Each denial is a record that the gateway path denied that action. The canary tests only the gateway path. Its egress probes do not run without a cluster, and the run lists them as not run.
 7. **The response playbook** throttles, restricts, quarantines, or kills an agent. The kill drill measures the time from the decision to the first denial.
 8. **The check engine** reads the evidence and gives each check PASS, FAIL, NO_EVIDENCE, STALE, or INELIGIBLE. It rolls each control up to MET, PARTIAL, or NOT MET, and writes OSCAL assessment results.
 9. **Beacon seals the results.** Membrane does not do custody. The Beacon plugin is in [integrations/beacon/](integrations/beacon/).
