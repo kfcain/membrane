@@ -22,10 +22,10 @@ Read in this order:
 | --- | --- |
 | Manifest schema and example registry (5 agents) | Done |
 | CI policy (conftest), runtime authz (OPA), admission (Kyverno and Rego) | Done. 187 Rego tests, 108 Kyverno rows |
-| Generators and drift check | Done. Not applied to a real cluster |
+| Generators and drift check | Done. Network and admission config tested on kind. SPIRE entries remain untested |
 | Reference gateway, approvals, canary, response playbook, kill drill | Done. Dev HMAC identity, mock tool backend |
 | Check engine, OSCAL 1.1.3 output, POA&M candidates, report | Done. OSCAL validates against the vendored NIST schema |
-| Beacon plugin | Done. Tested against a local Beacon install |
+| Beacon plugins | Done. Check summaries plus exact source JSONL bytes. Local witness sealing, checkpoints, byte recovery, and detection of edits tested |
 | GitHub Actions CI | Green on `main` |
 | Independent cold review | `docs/review/REVIEW-2026-09-27.md`: 26 findings. 26 FIXED, 0 OPEN, 0 WONTFIX. One commit per finding (`Fix R-NN: ...`), each with a test. R-03 has a second commit that restored a green state |
 
@@ -40,6 +40,8 @@ make demo     # end-to-end run; writes out/assessment/
 ```
 
 For the SCF tests, clone `kfcain/beacon` and set `MEMBRANE_SCF_ROWS` to `<beacon>/beacon/scf/objectives/rows.json`. Without it, those tests skip.
+
+For source custody integration tests, install Beacon in the same environment: `python3 -m pip install -e /path/to/beacon`. Set `MEMBRANE_REQUIRE_BEACON_TESTS=1` to fail if Beacon is missing. CI installs Beacon and sets this flag.
 
 ## 4. Rules that apply to all work
 
@@ -72,7 +74,7 @@ Two agents work in parallel. Each one owns its files. Do not edit files that the
 
 | Item | Owner | Branch | Files the owner changes | State |
 | --- | --- | --- | --- | --- |
-| 4. Source evidence custody | **Codex** | `codex/source-evidence-custody` | `integrations/beacon/`, `membrane/evidence.py` (sealing hooks only), custody tests, `LIMITS.md` custody section, `docs/CONTRACTS.md` custody text | IN PROGRESS. The branch exists only in the Codex workspace. It is not on GitHub. It has 20 tests and no implementation yet. Codex finishes it, pushes the branch, and merges to `main` when `make test` is green. |
+| 4. Source evidence custody | **Codex** | `codex/source-evidence-custody` (merged) | `integrations/beacon/`, `membrane/evidence.py` (sealing hooks only), custody tests, `LIMITS.md` custody section, `docs/CONTRACTS.md` custody text | DONE. PR #1, merge `d95b6a0ff889dbcb84d6e2a9b703caa4acddf02a`. GitHub CI run 36425955426 passed. Local `make test`: 260 Python tests, 187 Rego tests, 108 Kyverno rows, drift check OK. The 31 custody tests include the actual Beacon witness path. |
 | 1. Live cluster validation | **Claude** | `claude/live-cluster` (merged) | `.github/workflows/live-cluster.yml`, `scripts/live/`, `tests/live/`, `LIMITS.md` cluster lines, this table | DONE. 17 of 17 live probes pass on kind + Cilium 1.17.4 + Kyverno (GitHub run 36387979570). Runs on GitHub-hosted runners only, because neither sandbox can pull the kind node image. It found one real defect: Cilium must answer `nameError` (see LIMITS.md). |
 | 3. Real tool backend | Unassigned | | | Next after items 1 and 4 |
 | 2. SPIFFE identity | Unassigned | | | Last. Can reuse the item 1 kind cluster |
@@ -89,7 +91,7 @@ Rules for this split:
 1. **Kind cluster test.** DONE, see the table above and `scripts/live/`. Follow-ups: let `membrane checks run` read the live canary record from the workflow artifact, and add SPIRE to the same cluster for item 2. Original scope: Run a kind cluster with Cilium. Apply `out/generated/k8s/*` and `policy/admission/kyverno/*`. Then run the egress canary probes, which are listed as not run today. Add a DNS probe: an agent with a Cilium policy must fail to resolve a name outside its egress list (R-23). Also apply the admission policies and try the R-15 test pod (wrong namespace, service account, tier, and image digest) against the live webhook.
 2. **Identity.** Replace the dev HMAC identity with SPIFFE SVIDs over mTLS. The token fields already match the SPIFFE ID shape.
 3. **Real tool backend.** Add a real tool backend adapter that writes `tool_exec` records with mode `live`.
-4. **Custody.** Seal every evidence file, not only the check results, through the Beacon plugin.
+4. **Custody.** DONE. `beacon collect --plugin membrane.evidence` retains every top-level JSONL file from the selected source directories. It verifies envelopes and hashes, retains exact file bytes, and preserves record modes. Read `integrations/beacon/README.md` and `docs/CONTRACTS.md` section 9. Follow-ups: link source and assessment receipts automatically, schedule collection of closed log segments, and test remote custody. The snapshot does not lock writers or detect data omitted before collection.
 
 ## 7. Prompt to start a new model
 
