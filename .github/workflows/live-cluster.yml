@@ -38,11 +38,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$HOME/bin"
-          curl -sSLo "$HOME/bin/kind" "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
-          curl -sSLo "$HOME/bin/kubectl" "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-          curl -sSL "https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz" | tar xz -C "$HOME/bin" cilium
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o "$HOME/bin/kind" "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o "$HOME/bin/kubectl" "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 "https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz" | tar xz -C "$HOME/bin" cilium
           chmod +x "$HOME/bin/kind" "$HOME/bin/kubectl" "$HOME/bin/cilium"
           echo "$HOME/bin" >> "$GITHUB_PATH"
+          # Fail here, not later, if a download returned an error page.
+          "$HOME/bin/kind" version
+          "$HOME/bin/kubectl" version --client
+          "$HOME/bin/cilium" version --client
           command -v helm || curl -sSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
       - name: Install membrane
         run: pip install -e '.[dev]'
