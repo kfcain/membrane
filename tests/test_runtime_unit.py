@@ -350,3 +350,45 @@ def test_r08_cli_shows_action_and_does_not_sign_without_confirm(env, capsys):
     out = capsys.readouterr()
     assert code == 0 and out.out.strip().count(".") == 1  # the token is on stdout
     assert approvals.load(rec["approval_id"])["status"] == "approved"
+
+
+# ------------------------------------------------------------------ R-01: exact action binding
+
+@pytest.mark.parametrize("args_text", [
+    '{"amount":1e400}', '{"amount":-1e400}', '{"amount":NaN}', '{"amount":Infinity}', '{"amount":-Infinity}',
+    '{"amount":0.100000000000000000009}', '{"amount":9007199254740993.0}', '{"n":[1,{"x":1e999}]}',
+])
+def test_r01_inexact_or_non_finite_numbers_are_rejected(env, args_text):
+    gw = Gateway(GatewayConfig(policy_dir=REPO_ROOT / "policy" / "runtime", data_path=env / "nope.json"))
+    raw = ('{"tool":"erp.post_adjustment","resource":"r","args":' + args_text + '}').encode()
+    status, body = gw.handle_call(raw, None, None)
+    assert status == 403 and body["reasons"] == ["policy_error"]
+    rec = list(evidence.read_all(kinds={"decision"}))[-1]
+    assert rec["payload"]["action_sha256"] is None  # rejected at parse, before any hash
+
+
+@pytest.mark.parametrize("args_text", ['{"amount":0.1}', '{"amount":10.5}', '{"amount":-1250}', '{"amount":1e300}'])
+def test_r01_exact_numbers_are_accepted(env, args_text):
+    gw = Gateway(GatewayConfig(policy_dir=REPO_ROOT / "policy" / "runtime", data_path=env / "nope.json"))
+    raw = ('{"tool":"erp.post_adjustment","resource":"r","args":' + args_text + '}').encode()
+    gw.handle_call(raw, None, None)
+    rec = list(evidence.read_all(kinds={"decision"}))[-1]
+    assert rec["payload"]["action_sha256"]  # parsed and hashed; policy then decides
+
+
+def test_r01_distinct_literals_never_share_a_hash():
+    from membrane.gateway.server import parse_request_json
+    from membrane.gateway.tokens import action_sha256
+    seen = {}
+    for text in ('{"a":0.1}', '{"a":10}', '{"a":10.0}', '{"a":"10"}', '{"a":1e300}', '{"a":-0.0}', '{"a":0.0}'):
+        h = action_sha256("x", "t", "r", parse_request_json(text.encode()))
+        assert h not in seen, (text, seen.get(h))
+        seen[h] = text
+
+
+def test_r01_canonical_json_refuses_non_finite():
+    from membrane.manifest import canonical_json
+    with pytest.raises(ValueError):
+        canonical_json({"a": float("nan")})
+    with pytest.raises(ValueError):
+        canonical_json({"a": float("inf")})

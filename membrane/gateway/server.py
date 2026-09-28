@@ -10,6 +10,7 @@ malformed requests and policy failures. Policy failures deny (fail closed).
 from __future__ import annotations
 
 import json
+import math
 import re
 import secrets
 import sys
@@ -18,6 +19,7 @@ import time
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -122,7 +124,7 @@ class Gateway:
 
         # 2. Request body.
         try:
-            body = json.loads(raw_body or b"", object_pairs_hook=_no_duplicate_keys)
+            body = parse_request_json(raw_body or b"")
             if not isinstance(body, dict):
                 raise ValueError("body must be a JSON object")
             tool = body.get("tool")
@@ -264,6 +266,34 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(500, {"decision": "deny", "reasons": ["gateway_error"]})
             return
         self._send(status, body, body.get("trace_id"))
+
+
+def _exact_float(literal: str) -> float:
+    """Accept a JSON number with a fraction or exponent only when the float is finite and denotes
+    exactly the same decimal value as the literal. Then two different literals never parse to one
+    float, and one action hash never covers two different sent values."""
+    value = float(literal)
+    if not math.isfinite(value):
+        raise ValueError(f"number out of range: {literal[:40]!r}")
+    try:
+        exact = Decimal(repr(value)) == Decimal(literal)
+    except InvalidOperation as exc:
+        raise ValueError(f"bad number: {literal[:40]!r}") from exc
+    if not exact:
+        raise ValueError(f"number not exact as a 64-bit float: {literal[:40]!r}")
+    return value
+
+
+def _reject_constant(name: str):
+    raise ValueError(f"non-finite number not allowed: {name}")
+
+
+def parse_request_json(raw: bytes):
+    """Parse a request body. Reject duplicate keys, NaN, Infinity, and inexact or out-of-range numbers.
+    The args object that this returns is the object that the action hash covers and that the tool
+    backend receives."""
+    return json.loads(raw, object_pairs_hook=_no_duplicate_keys, parse_float=_exact_float,
+                      parse_constant=_reject_constant)
 
 
 def _no_duplicate_keys(pairs):

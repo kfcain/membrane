@@ -24,8 +24,9 @@ class ManifestError(Exception):
 
 
 def canonical_json(obj: Any) -> bytes:
-    """Stable JSON bytes: sorted keys, no spaces, UTF-8."""
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    """Stable JSON bytes: sorted keys, no spaces, UTF-8. NaN and Infinity raise ValueError."""
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+                      allow_nan=False).encode("utf-8")
 
 
 def sha256_hex(data: bytes) -> str:

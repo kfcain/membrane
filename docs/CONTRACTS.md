@@ -78,6 +78,15 @@ Input:
 
 Admission registry ConfigMap `membrane-system/membrane-registry` (written by `membrane gen`): one key per active agent id. The value is a JSON string with keys `sha256`, `tier` (a string, for example `"3"`), `namespace`, `service_account`, and `image_digests` (a list of `sha256:<hex>`). Kyverno and the Rego fallback deny a pod when any of these values differ from the pod, or when a field is missing.
 
+Action hash. `action_sha256` is the SHA-256 of `canonical_json({agent_id, tool, resource, args})`: sorted keys, no spaces, UTF-8, Python float `repr` for numbers with a fraction or exponent. It is not RFC 8785 (JCS). The gateway parses the body with these rules, so one hash never covers two different sent values:
+
+- A duplicate key in any object: `deny`, `policy_error`.
+- `NaN`, `Infinity`, or `-Infinity`: `deny`, `policy_error`.
+- A number with a fraction or exponent that is not finite as a 64-bit float, or that does not denote exactly the decimal value of the float's shortest form (for example `0.100000000000000000009`): `deny`, `policy_error`.
+- Integers stay exact integers. `10` and `10.0` hash differently.
+
+The parsed `args` object is the object that the hash covers and that the tool backend receives.
+
 `approval` is `null` when the caller sends no token. The gateway verifies the approval token signature before the call to OPA. OPA never sees a secret.
 
 Result:

@@ -8,6 +8,7 @@ Membrane is a reference. It shows a design and gives working parts that you can 
 - **Tool execution.** The tool backend is a mock. It executes nothing. It writes `tool_exec` records with mode `simulated`. A check that needs `tool_exec` is INELIGIBLE unless the run passes `--allow-nonlive`.
 - **Cluster config.** No generated NetworkPolicy, Cilium policy, SPIRE entry, or Kyverno policy has been applied to a real cluster. The formats were checked against upstream documentation and source. See [docs/SOURCES.md](docs/SOURCES.md).
 - **Admission image list.** The manifest has one `runtime.image`. Admission allows only that image digest in every container of an agent pod. A pod with a sidecar or an init image that the manifest does not name is denied. The schema has no field for more images yet.
+- **Action hash encoding.** The action hash uses membrane's own canonical JSON (Python float `repr`), not RFC 8785 (JCS). The gateway rejects inexact and non-finite numbers, so the hash binds the exact value sent. A backend in another language must reproduce this encoding to check a hash.
 - **Egress probes.** The canary cannot send pod egress. It lists the egress probes as not run. It does not report them as passed.
 - **Response actions.** The playbook writes the kubectl and spire-server commands it would run. It does not run them. The overrides file does take effect at the gateway at once.
 - **Fixture evidence.** Inventory, egress flow, secret scan, and pipeline evidence in the demo are fixtures with planted problems. They are not observations of a real system.
