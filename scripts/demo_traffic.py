@@ -55,7 +55,10 @@ def main() -> int:
             pending = (agent, body, resp["approval_id"])
     if pending:
         agent, body, approval_id = pending
-        approval_token, _, _ = approve(approval_id, "bob@example.com")
+        # The approver reviews the stored action and restates its hash.
+        from membrane.gateway.approvals import load
+        reviewed = load(approval_id)["action_sha256"]
+        approval_token, _, _ = approve(approval_id, "bob@example.com", confirm_action_sha256=reviewed)
         status, resp = call_tool(URL, token(agent), {**body, "approval_token": approval_token})
         ok = resp.get("decision") == "allow"
         failures += 0 if ok else 1

@@ -1,8 +1,12 @@
 """Pending approvals, approval issue, and single use.
 
 The gateway stores a pending approval in <state>/approvals/<id>.json when
-policy returns require_approval. `membrane approve` signs an approval token
-for the stored action hash and writes an `approval` evidence record.
+policy returns require_approval. The pending record holds the full action:
+agent_id, tool, resource, args, delegator, and action_sha256.
+`membrane approve` shows that action to the approver. It signs only when the
+approver restates the action hash with --confirm-action-sha256, and only when
+the stored action still hashes to that value. The `approval` evidence record
+carries the args that the approver saw.
 
 Extra gateway rules (not in OPA, because OPA never sees secrets or state):
 - The approver must differ from the delegator of the pending request.
@@ -21,7 +25,7 @@ from pathlib import Path
 
 from .. import evidence
 from .state import approvals_dir, atomic_write_json, locked
-from .tokens import TokenError, issue_approval, verify_approval
+from .tokens import TokenError, action_sha256, issue_approval, verify_approval
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 DEFAULT_APPROVAL_TTL = 900
@@ -43,11 +47,11 @@ def _rfc3339(ts: float) -> str:
     return datetime.fromtimestamp(ts, timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
-def create_pending(*, agent_id: str, tool: str, resource, action_sha256: str, delegator,
+def create_pending(*, agent_id: str, tool: str, resource, args: dict, action_sha256: str, delegator,
                    decision_id: str, trace_id: str) -> dict:
     approval_id = str(uuid.uuid4())
     rec = {"approval_id": approval_id, "action_sha256": action_sha256, "agent_id": agent_id,
-           "tool": tool, "resource": resource, "delegator": delegator, "decision_id": decision_id,
+           "tool": tool, "resource": resource, "args": args, "delegator": delegator, "decision_id": decision_id,
            "trace_id": trace_id, "requested_at": evidence.now_rfc3339(), "status": "pending"}
     atomic_write_json(_path(approval_id), rec, mode=0o600)
     return rec
@@ -60,14 +64,51 @@ def load(approval_id: str) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def approve(approval_id: str, approver: str, ttl: int = DEFAULT_APPROVAL_TTL) -> tuple[str, dict, Path]:
-    """Sign an approval token. Write `approval` evidence. Return (token, payload, evidence path)."""
+def verify_pending_action(rec: dict) -> None:
+    """Fail unless the stored action (agent_id, tool, resource, args) hashes to the stored action_sha256.
+    So the action that the approver sees is the action that the token binds."""
+    if "args" not in rec or not isinstance(rec.get("args"), dict):
+        raise ApprovalError("pending approval has no args; the approver cannot see the action")
+    try:
+        got = action_sha256(rec["agent_id"], rec["tool"], rec["resource"], rec["args"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ApprovalError(f"pending approval is malformed: {exc}") from exc
+    if got != rec.get("action_sha256"):
+        raise ApprovalError("the stored action does not match the stored action_sha256; do not approve")
+
+
+def describe(rec: dict) -> str:
+    """The action as the approver must see it. args are canonical JSON."""
+    from ..manifest import canonical_json
+    return "\n".join([
+        f"approval_id:    {rec.get('approval_id')}",
+        f"agent_id:       {rec.get('agent_id')}",
+        f"tool:           {rec.get('tool')}",
+        f"resource:       {rec.get('resource')}",
+        f"delegator:      {rec.get('delegator')}",
+        f"args:           {canonical_json(rec.get('args')).decode('utf-8')}",
+        f"requested_at:   {rec.get('requested_at')}",
+        f"status:         {rec.get('status')}",
+        f"action_sha256:  {rec.get('action_sha256')}",
+    ])
+
+
+def approve(approval_id: str, approver: str, ttl: int = DEFAULT_APPROVAL_TTL, *,
+            confirm_action_sha256: str) -> tuple[str, dict, Path]:
+    """Sign an approval token. Write `approval` evidence. Return (token, payload, evidence path).
+
+    confirm_action_sha256 is the action hash that the approver reviewed. It must equal the stored hash.
+    """
     if not EMAIL_RE.match(approver or ""):
         raise ApprovalError(f"approver must be an email address: {approver!r}")
     with locked(f"approval-{approval_id}"):
         rec = load(approval_id)
         if rec.get("status") != "pending":
             raise ApprovalError(f"approval {approval_id} is {rec.get('status')}, not pending")
+        if not isinstance(confirm_action_sha256, str) or confirm_action_sha256 != rec.get("action_sha256"):
+            raise ApprovalError("--confirm-action-sha256 does not equal the action hash of this request; "
+                                "review the action and restate its action_sha256")
+        verify_pending_action(rec)
         if rec.get("delegator") and rec["delegator"].lower() == approver.lower():
             raise ApprovalError("approver must differ from the delegator of the request")
         now = time.time()
@@ -75,7 +116,7 @@ def approve(approval_id: str, approver: str, ttl: int = DEFAULT_APPROVAL_TTL) ->
         token = issue_approval(approval_id, rec["action_sha256"], approver, exp)
         payload = {"approval_id": approval_id, "action_sha256": rec["action_sha256"],
                    "agent_id": rec["agent_id"], "tool": rec["tool"], "resource": rec["resource"],
-                   "approver": approver, "requested_at": rec["requested_at"],
+                   "args": rec["args"], "delegator": rec.get("delegator"), "approver": approver, "requested_at": rec["requested_at"],
                    "approved_at": _rfc3339(now), "expires_at": _rfc3339(exp)}
         rec.update(status="approved", approver=approver, approved_at=payload["approved_at"],
                    expires_at=payload["expires_at"])

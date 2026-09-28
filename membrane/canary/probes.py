@@ -104,7 +104,8 @@ def run_canary(reg: dict[str, Manifest], gateway_url: str, agent_id: str = "cana
     # (e) Replay: approve action A (probe d), present the token for action B.
     if pending:
         try:
-            token_a, _, _ = approvals.approve(pending, APPROVER, ttl=300)
+            token_a, _, _ = approvals.approve(pending, APPROVER, ttl=300,
+                                              confirm_action_sha256=approvals.load(pending)["action_sha256"])
             status, resp = call(good, body(tool, {"p": "e-other-action"}, approval_token=token_a))
         except approvals.ApprovalError as exc:
             status, resp = 0, {"decision": f"approve_failed:{exc}", "reasons": []}

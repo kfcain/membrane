@@ -284,3 +284,69 @@ def test_duplicate_json_keys_rejected():
     with pytest.raises(ValueError):
         json.loads('{"tool":"a","tool":"b"}', object_pairs_hook=_no_duplicate_keys)
     assert json.loads('{"tool":"a"}', object_pairs_hook=_no_duplicate_keys) == {"tool": "a"}
+
+
+# ------------------------------------------------------------------ R-08: approver sees the args
+
+def _pending(**kw):
+    from membrane.gateway import approvals, tokens
+    a = dict(agent_id="invoice-reconciler", tool="erp.post_adjustment", resource="invoice/INV-1001",
+             args={"amount_cents": -1250, "memo": "dup charge"}, delegator="alice@example.com")
+    a.update(kw)
+    h = tokens.action_sha256(a["agent_id"], a["tool"], a["resource"], a["args"])
+    return approvals.create_pending(action_sha256=h, decision_id="d", trace_id="0" * 32, **a), h
+
+
+def test_r08_pending_stores_full_action(env):
+    from membrane.gateway import approvals
+    rec, h = _pending()
+    stored = approvals.load(rec["approval_id"])
+    assert stored["args"] == {"amount_cents": -1250, "memo": "dup charge"}
+    assert (stored["resource"], stored["delegator"], stored["action_sha256"]) == ("invoice/INV-1001", "alice@example.com", h)
+
+
+def test_r08_approve_needs_matching_confirm_hash(env):
+    from membrane.gateway import approvals
+    rec, h = _pending()
+    with pytest.raises(approvals.ApprovalError, match="confirm"):
+        approvals.approve(rec["approval_id"], "bob@example.com", confirm_action_sha256="0" * 64)
+    with pytest.raises(approvals.ApprovalError, match="confirm"):
+        approvals.approve(rec["approval_id"], "bob@example.com", confirm_action_sha256="")
+    assert approvals.load(rec["approval_id"])["status"] == "pending"
+    token, payload, path = approvals.approve(rec["approval_id"], "bob@example.com", confirm_action_sha256=h)
+    assert payload["args"] == {"amount_cents": -1250, "memo": "dup charge"}
+    assert payload["delegator"] == "alice@example.com" and payload["resource"] == "invoice/INV-1001"
+    from membrane import evidence
+    ev = [r for r in evidence.read_all(kinds={"approval"})]
+    assert ev[-1]["payload"]["args"] == payload["args"]
+
+
+def test_r08_approve_refuses_tampered_pending_args(env):
+    import json as _json
+    from membrane.gateway import approvals
+    from membrane.gateway.state import approvals_dir
+    rec, h = _pending()
+    path = approvals_dir() / f"{rec['approval_id']}.json"
+    doc = _json.loads(path.read_text())
+    doc["args"]["amount_cents"] = -1  # what the approver would see no longer matches the hash
+    path.write_text(_json.dumps(doc))
+    with pytest.raises(approvals.ApprovalError, match="does not match"):
+        approvals.approve(rec["approval_id"], "bob@example.com", confirm_action_sha256=h)
+
+
+def test_r08_cli_shows_action_and_does_not_sign_without_confirm(env, capsys):
+    from membrane.cli import main
+    rec, h = _pending()
+    code = main(["approve", rec["approval_id"], "--approver", "bob@example.com"])
+    out = capsys.readouterr()
+    assert code != 0
+    text = out.out + out.err
+    for s in ("invoice-reconciler", "erp.post_adjustment", "invoice/INV-1001", "alice@example.com",
+              '"amount_cents":-1250', h):
+        assert s in text
+    from membrane.gateway import approvals
+    assert approvals.load(rec["approval_id"])["status"] == "pending"
+    code = main(["approve", rec["approval_id"], "--approver", "bob@example.com", "--confirm-action-sha256", h])
+    out = capsys.readouterr()
+    assert code == 0 and out.out.strip().count(".") == 1  # the token is on stdout
+    assert approvals.load(rec["approval_id"])["status"] == "approved"

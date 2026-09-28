@@ -44,7 +44,7 @@ sequenceDiagram
   O-->>G: require_approval
   G->>E: decision record
   G-->>A: 202 approval_id
-  H->>G: membrane approve (bound to action_sha256)
+  H->>G: membrane approve: review args, restate action_sha256
   G->>E: approval record
   A->>G: same call + approval token
   G->>O: input with verified approval

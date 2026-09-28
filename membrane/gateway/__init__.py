@@ -83,9 +83,26 @@ def _identity_issue(args) -> int:
 
 
 def _approve(args) -> int:
-    from .approvals import ApprovalError, approve
+    from .approvals import ApprovalError, approve, describe, load, verify_pending_action
     try:
-        token, payload, path = approve(args.approval_id, args.approver, args.ttl)
+        rec = load(args.approval_id)
+    except ApprovalError as exc:
+        print(f"FAIL {exc}", file=sys.stderr)
+        return 1
+    print("Review this action before you approve it:", file=sys.stderr)
+    print(describe(rec), file=sys.stderr)
+    try:
+        verify_pending_action(rec)
+    except ApprovalError as exc:
+        print(f"FAIL {exc}", file=sys.stderr)
+        return 1
+    if not args.confirm_action_sha256:
+        print("NOT SIGNED. To approve, run this command again with "
+              "--confirm-action-sha256 <the action_sha256 above>.", file=sys.stderr)
+        return 1
+    try:
+        token, payload, path = approve(args.approval_id, args.approver, args.ttl,
+                                       confirm_action_sha256=args.confirm_action_sha256)
     except ApprovalError as exc:
         print(f"FAIL {exc}", file=sys.stderr)
         return 1
@@ -118,4 +135,6 @@ def register(sub) -> None:
     p.add_argument("approval_id")
     p.add_argument("--approver", required=True)
     p.add_argument("--ttl", type=int, default=900)
+    p.add_argument("--confirm-action-sha256", default=None,
+                   help="The action_sha256 that you reviewed. Without it, the command shows the action and signs nothing.")
     p.set_defaults(func=_approve)

@@ -140,7 +140,9 @@ Every record has the envelope in `schema/evidence-record.v1.schema.json`: `schem
 - These hashes detect accidental or naive edits. They do not detect a writer that recomputes them. Beacon provides custody. See LIMITS.md.
 
 
-`approval`: `{approval_id, action_sha256, agent_id, tool, resource, approver, requested_at, approved_at, expires_at}`
+`approval`: `{approval_id, action_sha256, agent_id, tool, resource, args, delegator, approver, requested_at, approved_at, expires_at}`. `args` is the args object that the approver saw. `{agent_id, tool, resource, args}` hashes to `action_sha256`.
+
+Pending approval (state file `<state>/approvals/<id>.json`, not evidence): `{approval_id, action_sha256, agent_id, tool, resource, args, delegator, decision_id, trace_id, requested_at, status}`. `membrane approve` prints agent, tool, resource, delegator, args (canonical JSON), and `action_sha256`. It signs nothing unless `--confirm-action-sha256` equals the stored hash. It also refuses when the stored action no longer hashes to the stored `action_sha256`.
 
 `tool_exec`: `{exec_id, decision_id, agent_id, tool, resource, action_sha256, irreversible, approval_id, executed_at, result: "ok|error"}`. The tool backend writes it. A `tool_exec` with no matching `allow` decision is a finding. The reference backend is a mock, so it writes mode `simulated`. A real backend writes mode `live`.
 
@@ -198,7 +200,7 @@ A run with `--allow-nonlive` marks every result `"demo": true` and prints a bann
 | `membrane gen [--check]` | runtime |
 | `membrane gateway serve [--port 8750]` | runtime |
 | `membrane identity issue <agent_id> [--ttl 3600]` | runtime |
-| `membrane approve <approval_id> --approver <email>` | runtime |
+| `membrane approve <approval_id> --approver <email> [--confirm-action-sha256 <hex>]` | runtime |
 | `membrane canary run` | runtime |
 | `membrane respond <agent_id> --step throttle|restrict|quarantine|kill|restore [--reason ..] [--dry-run]` | runtime |
 | `membrane drill kill <agent_id>` | runtime |

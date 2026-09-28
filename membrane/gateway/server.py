@@ -189,7 +189,7 @@ class Gateway:
 
         if decision == "require_approval":
             pending = approvals.create_pending(agent_id=agent_id or "", tool=tool, resource=resource,
-                                               action_sha256=act_hash, delegator=delegator or None,
+                                               args=args, action_sha256=act_hash, delegator=delegator or None,
                                                decision_id=decision_id, trace_id=trace_id)
             rec["approval_id"], rec["approver"] = pending["approval_id"], None
             return self._finish(202, decision, reasons, rec, decision_id, trace_id, t0)

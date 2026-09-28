@@ -72,7 +72,7 @@ The demo passes `--allow-nonlive`. It mixes live gateway evidence with fixture c
 | `membrane gen [--check]` | Generate enforcement config. `--check` fails on drift |
 | `membrane gateway serve` | Run the reference tool gateway on 127.0.0.1:8750 |
 | `membrane identity issue <agent>` | Print a dev identity token (not SPIFFE) |
-| `membrane approve <approval_id> --approver <email>` | Approve one pending action |
+| `membrane approve <approval_id> --approver <email> [--confirm-action-sha256 <hex>]` | Show one pending action (agent, tool, resource, delegator, args, action hash). Sign an approval only with `--confirm-action-sha256` equal to the shown hash |
 | `membrane canary run` | Run the negative tests against the gateway |
 | `membrane respond <agent> --step <step>` | Throttle, restrict, quarantine, kill, or restore an agent |
 | `membrane drill kill <agent>` | Measure time from kill decision to denial |

@@ -82,8 +82,10 @@ def test_runtime_integration_end_to_end(gateway):
     pending = json.loads((gateway["tmp"] / "state" / "approvals" / f"{approval_id}.json").read_text())
     assert pending["action_sha256"] == tokens.action_sha256(m.id, action["tool"], action["resource"], action["args"])
     with pytest.raises(approvals.ApprovalError):
-        approvals.approve(approval_id, "alice@example.com")  # delegator cannot approve own request
-    appr, _, _ = approvals.approve(approval_id, "bob@example.com")
+        approvals.approve(approval_id, "alice@example.com",
+                          confirm_action_sha256=pending["action_sha256"])  # delegator cannot approve own request
+    assert pending["args"] == action["args"]
+    appr, _, _ = approvals.approve(approval_id, "bob@example.com", confirm_action_sha256=pending["action_sha256"])
     s, r = call_tool(url, tok, {**action, "approval_token": appr})
     assert (s, r["decision"], r["reasons"]) == (200, "allow", ["within_manifest"])
     # single use: the same approval does not allow again
