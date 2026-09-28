@@ -113,7 +113,7 @@ Fail-closed defaults in the policy: a missing `requires_delegator` counts as tru
 
 Rate limits are enforced in the gateway, not in OPA. A rate-limit rejection is a `deny` with reason `rate_limited`, logged the same way.
 
-The gateway adds three rules that can only make a decision stricter. An approval token works once. The approver must be a different person from the delegator. When two calls race for one approval, the loser gets `deny` with reason `approval_consumed`.
+The gateway adds rules that can only make a decision stricter. A `delegator` that is not null, empty, or white space must be a strict email address (no white space, no control characters, one `@`); otherwise `deny`, `policy_error`. An empty or white space delegator counts as null. An approval token works once. The approver must be a strict email address and a different person from the delegator. The compare uses strip, Unicode NFKC, and casefold on both values. When two calls race for one approval, the loser gets `deny` with reason `approval_consumed`.
 
 ## 4. Decision log payload (`kind: decision`)
 

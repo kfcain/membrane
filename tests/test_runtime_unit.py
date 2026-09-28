@@ -392,3 +392,50 @@ def test_r01_canonical_json_refuses_non_finite():
         canonical_json({"a": float("nan")})
     with pytest.raises(ValueError):
         canonical_json({"a": float("inf")})
+
+
+# ------------------------------------------------------------------ R-02: delegator and approver identity
+
+@pytest.mark.parametrize("delegator", [" alice@example.com", "alice@example.com ", "alice@example.com\n", "x",
+                                       "alice", "a@b", "al ice@example.com", "alice@@example.com", 5])
+def test_r02_gateway_rejects_non_email_delegator(env, delegator):
+    import json as _json
+    gw = Gateway(GatewayConfig(policy_dir=REPO_ROOT / "policy" / "runtime", data_path=env / "nope.json"))
+    raw = _json.dumps({"tool": "t", "resource": "r", "args": {}, "delegator": delegator}).encode()
+    status, body = gw.handle_call(raw, None, None)
+    assert status == 403 and body["reasons"] == ["policy_error"]
+    rec = list(evidence.read_all(kinds={"decision"}))[-1]
+    assert rec["payload"]["action_sha256"] is None
+
+
+@pytest.mark.parametrize("delegator", ["alice@example.com", None, "", "   "])
+def test_r02_gateway_accepts_email_or_empty_delegator(env, delegator):
+    import json as _json
+    gw = Gateway(GatewayConfig(policy_dir=REPO_ROOT / "policy" / "runtime", data_path=env / "nope.json"))
+    raw = _json.dumps({"tool": "t", "resource": "r", "args": {}, "delegator": delegator}).encode()
+    gw.handle_call(raw, None, None)
+    rec = list(evidence.read_all(kinds={"decision"}))[-1]
+    assert rec["payload"]["action_sha256"]
+    assert rec["payload"]["delegator"] == (delegator if delegator and delegator.strip() else None)
+
+
+@pytest.mark.parametrize("stored,approver", [
+    ("alice@example.com", "Alice@Example.COM"),
+    (" alice@example.com", "alice@example.com"),
+    ("alice@example.com", "ａlice@example.com"),   # fullwidth a, NFKC folds it
+    ("ALICE@EXAMPLE.COM", "alice@example.com"),
+])
+def test_r02_delegator_cannot_approve_own_request(env, stored, approver):
+    from membrane.gateway import approvals
+    rec, h = _pending(delegator=stored)
+    with pytest.raises(approvals.ApprovalError):
+        approvals.approve(rec["approval_id"], approver, confirm_action_sha256=h)
+    assert approvals.load(rec["approval_id"])["status"] == "pending"
+
+
+@pytest.mark.parametrize("approver", ["bob@example.com\n", " bob@example.com", "bob", "bob@example.com\x00"])
+def test_r02_approver_must_be_strict_email(env, approver):
+    from membrane.gateway import approvals
+    rec, h = _pending()
+    with pytest.raises(approvals.ApprovalError, match="email"):
+        approvals.approve(rec["approval_id"], approver, confirm_action_sha256=h)

@@ -141,6 +141,10 @@ class Gateway:
             delegator = body.get("delegator")
             if delegator is not None and not isinstance(delegator, str):
                 raise ValueError("delegator must be a string or null")
+            if isinstance(delegator, str) and not delegator.strip():
+                delegator = None  # empty or white space: no delegator (policy rule 7 decides)
+            if delegator is not None and not approvals.is_email(delegator):
+                raise ValueError("delegator must be an email address with no white space")
             approval_token = body.get("approval_token")
             if approval_token is not None and not isinstance(approval_token, str):
                 raise ValueError("approval_token must be a string")

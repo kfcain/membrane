@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import re
 import time
+import unicodedata
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,7 +28,17 @@ from .. import evidence
 from .state import approvals_dir, atomic_write_json, locked
 from .tokens import TokenError, action_sha256, issue_approval, verify_approval
 
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# Strict form. Use fullmatch: "$" in re.match also matches before a final newline.
+EMAIL_RE = re.compile(r"[^@\s\x00-\x1f\x7f]+@[^@\s\x00-\x1f\x7f]+\.[^@\s\x00-\x1f\x7f]+")
+
+
+def is_email(value) -> bool:
+    return isinstance(value, str) and EMAIL_RE.fullmatch(value) is not None
+
+
+def normalize_identity(value) -> str:
+    """Compare form for a person identity: strip, NFKC, casefold."""
+    return unicodedata.normalize("NFKC", str(value or "")).strip().casefold()
 DEFAULT_APPROVAL_TTL = 900
 
 
@@ -99,7 +110,7 @@ def approve(approval_id: str, approver: str, ttl: int = DEFAULT_APPROVAL_TTL, *,
 
     confirm_action_sha256 is the action hash that the approver reviewed. It must equal the stored hash.
     """
-    if not EMAIL_RE.match(approver or ""):
+    if not is_email(approver):
         raise ApprovalError(f"approver must be an email address: {approver!r}")
     with locked(f"approval-{approval_id}"):
         rec = load(approval_id)
@@ -109,7 +120,7 @@ def approve(approval_id: str, approver: str, ttl: int = DEFAULT_APPROVAL_TTL, *,
             raise ApprovalError("--confirm-action-sha256 does not equal the action hash of this request; "
                                 "review the action and restate its action_sha256")
         verify_pending_action(rec)
-        if rec.get("delegator") and rec["delegator"].lower() == approver.lower():
+        if rec.get("delegator") and normalize_identity(rec["delegator"]) == normalize_identity(approver):
             raise ApprovalError("approver must differ from the delegator of the request")
         now = time.time()
         exp = int(now) + int(ttl)
