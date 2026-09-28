@@ -192,6 +192,7 @@ def run_egress(reg: dict, image_ref: str, out: Path) -> tuple[list[dict], list[d
         print(f"{'PASS' if observed == expected else 'FAIL'} {probe:48} expected={expected:10} observed={observed}")
         annotate("notice" if observed == expected else "error", f"{'PASS' if observed == expected else 'FAIL'} {probe}",
                  f"expected={expected} observed={observed} {(cp.stderr or '').strip()[-300:]}")
+    diagnose_dns(reg)
     # Known limit (LIMITS.md): an agent with no egress list keeps layer 4 DNS.
     ns = reg["kb-reader"].spec["runtime"]["namespace"]
     cp = kubectl(["exec", "-n", ns, "kb-reader-live", "--", "curl", "-sS", "-o", "/dev/null",
@@ -200,6 +201,31 @@ def run_egress(reg: dict, image_ref: str, out: Path) -> tuple[list[dict], list[d
               "observed": classify(cp.returncode),
               "note": "Documented in LIMITS.md. Not a probe. 'blocked' here means the name resolved and TCP was dropped."}]
     return results, known
+
+
+def diagnose_dns(reg: dict) -> None:
+    """One warning annotation with DNS facts. Diagnostic only; it sets no result."""
+    ns = reg["invoice-reconciler"].spec["runtime"]["namespace"]
+    pod = "invoice-reconciler-live"
+    coredns_ip = kubectl(["get", "pod", "-n", "kube-system", "-l", "k8s-app=kube-dns",
+                          "-o", "jsonpath={.items[0].status.podIP}"]).stdout.strip()
+    cmds = {
+        "resolv.conf": ["cat", "/etc/resolv.conf"],
+        "nslookup_via_service": ["nslookup", "example.com"],
+        "nslookup_via_pod_ip": ["nslookup", "example.com", coredns_ip],
+        "curl_absolute_name": ["curl", "-sS", "-o", "/dev/null", "-m", "10", "https://example.com./"],
+    }
+    lines = [f"coredns_pod_ip={coredns_ip}"]
+    for label, cmd in cmds.items():
+        cp = kubectl(["exec", "-n", ns, pod, "--", *cmd], timeout=40)
+        lines.append(f"[{label}] exit={cp.returncode} out={(cp.stdout or '').strip()[-250:]} err={(cp.stderr or '').strip()[-200:]}")
+    cfg = subprocess.run(["cilium", "config", "view"], capture_output=True, text=True, timeout=60).stdout
+    lines.append("[cilium] " + " ".join(l for l in cfg.splitlines()
+                                        if any(k in l for k in ("kube-proxy-replacement", "dnsproxy", "tofqdns", "enable-l7-proxy")))[:500])
+    cnp = kubectl(["get", "cnp", "-n", ns, "-o", "jsonpath={.items[*].status}"]).stdout.strip()
+    lines.append(f"[cnp status] {cnp[-400:]}")
+    (Path("var/live") / "dns-diagnostics.txt").write_text("\n".join(lines))
+    annotate("warning", "dns diagnostics", "\n".join(lines))
 
 
 # --------------------------------------------------------------- main
