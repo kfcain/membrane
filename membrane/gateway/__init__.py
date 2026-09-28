@@ -89,7 +89,7 @@ def _approve(args) -> int:
     except ApprovalError as exc:
         print(f"FAIL {exc}", file=sys.stderr)
         return 1
-    print("Note: the reference does not authenticate the approver. --approver is a claim. See LIMITS.md.",
+    print("Note: the approver is not authenticated in the reference. --approver is a claim. See LIMITS.md.",
           file=sys.stderr)
     print("Review this action before you approve it:", file=sys.stderr)
     print(describe(rec), file=sys.stderr)
