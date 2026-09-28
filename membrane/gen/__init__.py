@@ -15,6 +15,9 @@ What it does:
   policy needs. The plain policy then has no DNS allow, because a layer 4
   allow to port 53 would disable the Cilium DNS name rules. An agent with no
   egress list keeps a DNS allow to kube-dns in the plain policy.
+- Writes one egress default-deny NetworkPolicy per agent namespace. It selects
+  every pod that does not carry membrane.io/component, so an unlabeled pod in
+  an agent namespace has no egress.
 - Writes one quarantine NetworkPolicy per agent namespace. The agent policies
   exclude pods labeled membrane.io/quarantine=true, so that label cuts all traffic.
 - Writes the membrane-registry ConfigMap. One key per active agent. The value

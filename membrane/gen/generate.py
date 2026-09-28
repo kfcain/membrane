@@ -184,6 +184,24 @@ def quarantine_policy(namespace: str) -> dict:
     }
 
 
+COMPONENT_LABEL = "membrane.io/component"
+
+
+def default_deny_policy(namespace: str) -> dict:
+    """Deny egress for every pod in an agent namespace that is not a membrane component.
+
+    The per-agent policies add allows for pods with a registered agent-id label. A pod with no
+    label, or with a label that no policy names, then has no egress. Membrane's own pods
+    (gateway, OPA) carry membrane.io/component and are out of scope here."""
+    return {
+        "apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
+        "metadata": {"name": "membrane-default-deny-egress", "namespace": namespace,
+                     "labels": {"app.kubernetes.io/managed-by": "membrane"}},
+        "spec": {"podSelector": {"matchExpressions": [{"key": COMPONENT_LABEL, "operator": "DoesNotExist"}]},
+                 "policyTypes": ["Egress"], "egress": []},
+    }
+
+
 def registry_entry(m: Manifest) -> str:
     """One ConfigMap value per agent: compact JSON with sorted keys. The tier is a string,
     so it compares directly with the membrane.io/tier label. A non-k8s agent has no
@@ -220,6 +238,7 @@ def generate(reg: dict[str, Manifest], *, parent_id: str = DEFAULT_PARENT_ID,
             out[f"k8s/{m.id}.cilium-egress.yaml"] = _yaml(cilium_egress(m))
     for ns in sorted(namespaces):
         out[f"k8s/quarantine.{ns}.networkpolicy.yaml"] = _yaml(quarantine_policy(ns))
+        out[f"k8s/default-deny.{ns}.networkpolicy.yaml"] = _yaml(default_deny_policy(ns))
     return dict(sorted(out.items()))
 
 

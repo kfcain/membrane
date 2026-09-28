@@ -603,3 +603,18 @@ def test_r07_overrides_not_an_object_is_policy_error(env, reg, tmp_path):
     tok = tokens.issue_identity(m.id, m.sha256, tokens.spiffe_id_for(m))
     status, body = _call(gw, tok, {"tool": "kb.search", "resource": "q", "args": {}, "delegator": "a@example.com"})
     assert (body["decision"], body["reasons"]) == ("deny", ["policy_error"])
+
+
+# ------------------------------------------------------------------ R-24: namespace-wide egress default-deny
+
+def test_r24_default_deny_egress_per_agent_namespace(reg):
+    import yaml
+    out = generate(reg)
+    namespaces = {m.spec["runtime"]["namespace"] for m in reg.values() if m.spec["runtime"]["type"] == "k8s"}
+    for ns in namespaces:
+        doc = yaml.safe_load(out[f"k8s/default-deny.{ns}.networkpolicy.yaml"])
+        assert doc["metadata"]["namespace"] == ns
+        spec = doc["spec"]
+        assert spec["policyTypes"] == ["Egress"] and spec.get("egress", []) == []
+        # Every pod except membrane components, whatever labels it carries.
+        assert spec["podSelector"] == {"matchExpressions": [{"key": "membrane.io/component", "operator": "DoesNotExist"}]}

@@ -31,7 +31,7 @@ flowchart LR
 
 1. **One manifest per agent is the source of truth.** It holds the tier, tools, egress, approvals, evals, AI-BOM, and sandbox settings. See [schema/agent-manifest.v1.schema.json](schema/agent-manifest.v1.schema.json).
 2. **The CI gate enforces tier rules** before merge. A tier 3 agent with an irreversible tool must require approval. A tier 4 agent must run in an isolated sandbox with no standing credentials.
-3. **Generators build all enforcement config from the manifests:** OPA data, SPIRE registration entries, default-deny NetworkPolicy, Cilium FQDN egress policy, and the registry ConfigMap. `membrane gen --check` fails when the committed config differs from the manifests.
+3. **Generators build all enforcement config from the manifests:** OPA data, SPIRE registration entries, a per-agent egress NetworkPolicy, a namespace-wide egress default-deny for every agent namespace, Cilium FQDN egress policy, and the registry ConfigMap. `membrane gen --check` fails when the committed config differs from the manifests.
 4. **Admission control** rejects agent pods that are not registered, whose manifest hash differs, or whose image is not pinned by digest.
 5. **The tool gateway asks OPA on every call.** The answer is allow, deny, or require approval. An approval token is bound to the hash of one exact action and works once. Every decision becomes an evidence record with a trace id.
 6. **Canary probes** try forbidden actions on a schedule. Each denial is proof that a gate works. Proof that a gate operates is stronger than a configuration screenshot.
