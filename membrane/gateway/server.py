@@ -109,7 +109,7 @@ class Gateway:
         except Exception as exc:  # noqa: BLE001 - fail closed with a record
             detail = f"internal error: {exc!r}"[:300]
             if getattr(self._tls, "written", False):
-                print(f"gateway error after the decision record {call['decision_id']}: {detail}",
+                print(f"gateway error after the decision record {call['decision_id']}: {json.dumps(detail)}",
                       file=sys.stderr, flush=True)
                 return 500, {"decision": "deny", "reasons": ["gateway_error"], "decision_id": call["decision_id"],
                              "trace_id": call["trace_id"], "action_sha256": call["rec"].get("action_sha256")}
@@ -243,8 +243,10 @@ class Gateway:
                    "latency_ms": round((time.perf_counter() - t0) * 1000.0, 3), "otel": otel}
         evidence.emit("decision", SOURCE, payload, mode="live", agent_id=rec["agent_id"], trace_id=trace_id)
         self._tls.written = True
-        print(f"decision {decision:16} {','.join(reasons):40} agent={rec['agent_id']} tool={rec['tool']} "
-              f"trace={trace_id}" + (f" detail={detail}" if detail else ""), file=sys.stderr, flush=True)
+        # JSON-encode every caller-controlled field, so a field cannot start a new log line.
+        print(f"decision {decision:16} {','.join(reasons):40} agent={json.dumps(rec['agent_id'])} "
+              f"tool={json.dumps(rec['tool'])} trace={json.dumps(trace_id)}"
+              + (f" detail={json.dumps(detail)}" if detail else ""), file=sys.stderr, flush=True)
         out = {"decision": decision, "reasons": list(reasons), "decision_id": decision_id, "trace_id": trace_id,
                "action_sha256": rec["action_sha256"]}
         if decision == "require_approval":
