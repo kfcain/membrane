@@ -94,6 +94,7 @@ checks:
     target: >-
       Zero tool_exec records in the window have a decision_id with no matching decision record,
       a matching decision that is not allow, or a matching decision for another agent, tool, or action hash.
+      A decision_id that more than one tool_exec record names is also a finding.
     remediation: >-
       Route the listed tool backend through the gateway so that it runs only after an allow decision, and investigate each listed execution.
     controls:
@@ -111,6 +112,7 @@ checks:
       and the same action_sha256 that did not expire before the execution time. The registry manifest
       decides irreversibility for the agent and tool. An unknown agent or tool, or a missing flag, counts
       as irreversible. A tool_exec irreversible flag that differs from the manifest is also a finding.
+      An approval_id that more than one tool_exec record names is also a finding.
     remediation: >-
       Block irreversible tools in the gateway until a verified approval token for the exact action hash is present, and review each listed execution with its owner.
     controls:

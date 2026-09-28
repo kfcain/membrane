@@ -160,25 +160,39 @@ def _decisions_by_id(records: list[dict]) -> dict[str, dict]:
     return out
 
 
+def _reuse_counts(ctx: EvalContext, field: str) -> dict:
+    """How many eligible tool_exec records (at or before --now) name each value of field."""
+    counts: dict = {}
+    for r in ctx.eligible.get("tool_exec", []):
+        v = r["payload"].get(field)
+        if v:
+            counts[v] = counts.get(v, 0) + 1
+    return counts
+
+
 def agt_au_01(ctx: EvalContext) -> Outcome:
     execs = ctx.window["tool_exec"]
     decisions = _decisions_by_id(ctx.eligible.get("decision", []))
     ineligible = _decisions_by_id([r for r in ctx.all_records.get("decision", []) if r["id"] not in {d["id"] for d in decisions.values()}])
+    uses = _reuse_counts(ctx, "decision_id")
     out = Outcome(examined=len(execs), record_ids=[r["id"] for r in execs])
     for r in execs:
         e = r["payload"]
         d = decisions.get(e["decision_id"])
-        reason = None
+        reasons = []
         if d is None:
-            reason = "decision_ineligible" if e["decision_id"] in ineligible else "decision_missing"
+            reasons.append("decision_ineligible" if e["decision_id"] in ineligible else "decision_missing")
         else:
             dp = d["payload"]
             if dp["decision"] != "allow":
-                reason = "decision_not_allow"
+                reasons.append("decision_not_allow")
             elif (dp["agent_id"], dp["tool"], dp["action_sha256"]) != (e["agent_id"], e["tool"], e["action_sha256"]):
-                reason = "decision_mismatch"
+                reasons.append("decision_mismatch")
             out.record_ids.append(d["id"])
-        if reason:
+        if uses.get(e["decision_id"], 0) > 1:
+            # One allow decision authorizes one execution.
+            reasons.append("decision_reused")
+        for reason in reasons:
             out.offending.append({
                 "exec_id": e["exec_id"], "decision_id": e["decision_id"], "agent_id": e["agent_id"],
                 "tool": e["tool"], "resource": e.get("resource"), "reason": reason, "record_id": r["id"],
@@ -202,6 +216,7 @@ def agt_ac_01(ctx: EvalContext) -> Outcome:
     approvals: dict[str, dict] = {}
     for a in ctx.eligible.get("approval", []):
         approvals.setdefault(a["payload"]["approval_id"], a)
+    uses = _reuse_counts(ctx, "approval_id")
     out = Outcome(examined=0, record_ids=[])
     for r in ctx.window["tool_exec"]:
         e = r["payload"]
@@ -228,6 +243,9 @@ def agt_ac_01(ctx: EvalContext) -> Outcome:
                     reasons.append("approval_hash_mismatch")
                 elif ap.get("expires_at") and parse_time(ap["expires_at"]) < parse_time(e["executed_at"]):
                     reasons.append("approval_expired")
+        if aid and uses.get(aid, 0) > 1:
+            # An approval is single use. More than one execution names it.
+            reasons.append("approval_reused")
         for reason in reasons:
             out.offending.append({
                 "exec_id": e["exec_id"], "agent_id": e["agent_id"], "tool": e["tool"],

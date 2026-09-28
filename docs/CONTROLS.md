@@ -106,7 +106,7 @@ ISO/IEC 42001 Annex A ids are not in this file. The standard text is not public,
 ### AGT-AU-01 Every tool execution has an allow decision
 
 - Question: Does every tool execution trace back to an allow decision from the gateway?
-- Target: Zero tool_exec records in the window have a decision_id with no matching decision record, a matching decision that is not allow, or a matching decision for another agent, tool, or action hash.
+- Target: Zero tool_exec records in the window have a decision_id with no matching decision record, a matching decision that is not allow, or a matching decision for another agent, tool, or action hash. A decision_id that more than one tool_exec record names is also a finding.
 - Evidence kinds: tool_exec
 - Supporting kinds: decision
 - Max age: 24 hours
@@ -121,7 +121,7 @@ ISO/IEC 42001 Annex A ids are not in this file. The standard text is not public,
 ### AGT-AC-01 Irreversible actions have a bound approval
 
 - Question: Does every executed irreversible action have a human approval bound to the same action hash?
-- Target: Zero irreversible tool_exec records in the window lack an approval record with the same approval_id and the same action_sha256 that did not expire before the execution time. The registry manifest decides irreversibility for the agent and tool. An unknown agent or tool, or a missing flag, counts as irreversible. A tool_exec irreversible flag that differs from the manifest is also a finding.
+- Target: Zero irreversible tool_exec records in the window lack an approval record with the same approval_id and the same action_sha256 that did not expire before the execution time. The registry manifest decides irreversibility for the agent and tool. An unknown agent or tool, or a missing flag, counts as irreversible. A tool_exec irreversible flag that differs from the manifest is also a finding. An approval_id that more than one tool_exec record names is also a finding.
 - Evidence kinds: tool_exec
 - Supporting kinds: approval
 - Max age: 24 hours

@@ -290,3 +290,35 @@ def test_r17_ac_01_unknown_tool_or_missing_flag_counts_as_irreversible(tmp_path)
     c = _status(tmp_path, sets, "AGT-AC-01")
     got = {(o["exec_id"], o["reason"]) for o in c["offending"]}
     assert (e["payload"]["exec_id"], "approval_missing") in got
+
+
+# R-18: one allow decision or one approval named by more than one execution is a finding.
+
+def _clone_exec(sets, e, n):
+    import copy
+    from _checks_util import BUILDER
+    out = []
+    for i in range(n):
+        c = copy.deepcopy(e)
+        c["id"] = BUILDER.uid("record", "tool_exec", f"reuse-{i}")
+        c["payload"]["exec_id"] = BUILDER.uid("exec", f"reuse-{i}")
+        rehash(c)
+        out.append(c)
+    sets["tool_exec"].extend(out)
+    return out
+
+
+def test_r18_reused_decision_and_approval_are_findings(tmp_path):
+    sets = fixture_sets()
+    good = next(r for r in sets["tool_exec"] if r["payload"]["approval_id"]
+                and r["payload"]["tool"] == "erp.post_adjustment"
+                and any(a["payload"]["approval_id"] == r["payload"]["approval_id"]
+                        and a["payload"]["action_sha256"] == r["payload"]["action_sha256"] for a in sets["approval"]))
+    clones = _clone_exec(sets, good, 2)
+    code, res, _ = run(tmp_path, sets)
+    assert code == 0
+    au = {(o["exec_id"], o["reason"]) for o in check(res, "AGT-AU-01")["offending"]}
+    ac = {(o["exec_id"], o["reason"]) for o in check(res, "AGT-AC-01")["offending"]}
+    for e in [good] + clones:
+        assert (e["payload"]["exec_id"], "decision_reused") in au
+        assert (e["payload"]["exec_id"], "approval_reused") in ac
