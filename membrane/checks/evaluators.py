@@ -352,12 +352,27 @@ def agt_cm_01(ctx: EvalContext) -> Outcome:
 
 # ---------------------------------------------------------------- canary and drills
 
+def probe_passes(probe: dict) -> bool:
+    """Compute a probe result from expected and observed. Do not trust the probe's pass flag.
+
+    expected is "<decision>" or "<decision>/<reason>". observed is "<decision>" or
+    "<decision>/<reason>,<reason>". Without reasons in observed, the probe's reasons list counts.
+    """
+    expected, observed = probe.get("expected"), probe.get("observed")
+    if not isinstance(expected, str) or not isinstance(observed, str) or not expected:
+        return False
+    exp_dec, _, exp_reason = expected.partition("/")
+    obs_dec, sep, obs_reasons = observed.partition("/")
+    reasons = obs_reasons.split(",") if sep else list(probe.get("reasons") or [])
+    return exp_dec == obs_dec and (not exp_reason or exp_reason in reasons)
+
+
 def agt_tst_01(ctx: EvalContext) -> Outcome:
     r = _newest(ctx.window["canary"])
     p = r["payload"]
     out = Outcome(examined=len(p["probes"]), record_ids=[r["id"]])
     for probe in p["probes"]:
-        if probe["pass"] is not True:
+        if not probe_passes(probe) or probe.get("pass") is not True:
             out.offending.append({
                 "run_id": p["run_id"], "probe": probe["probe"], "expected": probe.get("expected"),
                 "observed": probe.get("observed"), "record_id": r["id"],
@@ -366,6 +381,9 @@ def agt_tst_01(ctx: EvalContext) -> Outcome:
         out.offending.append({"run_id": p["run_id"], "probe": None, "reason": "all_pass_false", "record_id": r["id"]})
     if not p["probes"]:
         out.offending.append({"run_id": p["run_id"], "probe": None, "reason": "no_probes", "record_id": r["id"]})
+    not_run = [x.get("probe") if isinstance(x, dict) else str(x) for x in (p.get("not_run") or [])]
+    if not_run:
+        out.notes.append(f"{len(not_run)} probe(s) not run: {', '.join(str(x) for x in not_run)}")
     return out
 
 

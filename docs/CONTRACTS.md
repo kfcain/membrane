@@ -158,7 +158,7 @@ Pending approval (state file `<state>/approvals/<id>.json`, not evidence): `{app
 
 `tool_exec`: `{exec_id, decision_id, agent_id, tool, resource, action_sha256, irreversible, approval_id, executed_at, result: "ok|error"}`. The tool backend writes it. A `tool_exec` with no matching `allow` decision is a finding. The reference backend is a mock, so it writes mode `simulated`. A real backend writes mode `live`.
 
-`canary`: `{run_id, probes: [{probe, expected, observed, reasons, pass}], all_pass}`
+`canary`: `{run_id, probes: [{probe, expected, observed, reasons, pass}], all_pass, not_run: [{probe, reason}]}`. `expected` is `"<decision>"` or `"<decision>/<reason>"`. `observed` is `"<decision>"` or `"<decision>/<reason>,<reason>"`. AGT-TST-01 recomputes each probe result from these two fields and does not trust `pass` alone.
 
 `response`: `{step: "throttle|restrict|quarantine|kill|restore", agent_id, reason, actor, actions: [{system, command, dry_run, result}], decided_at, effective_at}`
 

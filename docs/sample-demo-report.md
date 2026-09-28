@@ -2,11 +2,11 @@
 
 > **DEMONSTRATION RUN.** This run passed `--allow-nonlive`. Fixture and simulated records count as eligible. This report is a demonstration. It is not an assessment.
 
-- Run id: `dd4075a0-c62d-5adf-860b-9e61f4e88815`
-- Assessment time: `2026-09-28T02:54:24Z`
+- Run id: `aa8f5ad4-755c-5fcb-a584-a83a8e950e3b`
+- Assessment time: `2026-09-28T03:03:16Z`
 - Evidence directories: `var/evidence`, `fixtures/evidence`
 - Input records: 34
-- results.json SHA-256: `36190eace5adb7869c342d5cc7d5e688d49a17de0621a241e3ffcd1d7e8afbe1`
+- results.json SHA-256: `97a5391356715ddaeb6b3454c56c18cda58c09dfaf11191316ccf332e601976c`
 
 ## Check status counts
 
@@ -27,7 +27,7 @@
 | AGT-AC-02 | Delegator present where the manifest requires one | **PASS** | 0 | 4 | 0 offending items out of 4 examined |
 | AGT-SC-01 | Egress stays inside the manifest list | **FAIL** | 1 | 5 | 1 offending item(s) out of 5 examined |
 | AGT-CM-01 | Deploys pass every gate | **FAIL** | 1 | 5 | 1 offending item(s) out of 5 examined |
-| AGT-TST-01 | Canary probes pass daily | **PASS** | 0 | 8 | 0 offending items out of 8 examined |
+| AGT-TST-01 | Canary probes pass daily | **PASS** | 0 | 8 | 0 offending items out of 8 examined; 2 probe(s) not run: egress_fqdn_outside_manifest, egress_direct_ip |
 | AGT-IR-01 | Kill drill inside 90 days and inside SLA | **PASS** | 0 | 1 | 0 offending items out of 1 examined |
 
 ## Control rollup

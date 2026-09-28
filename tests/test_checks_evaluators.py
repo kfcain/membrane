@@ -370,3 +370,36 @@ def test_r19_good_exec_passes_time_and_decision_checks(tmp_path):
     e, _ = _good_ac_exec(sets)
     c = _status(tmp_path, sets, "AGT-AC-01")
     assert e["payload"]["exec_id"] not in {o["exec_id"] for o in c["offending"]}
+
+
+# R-20: the evaluator computes each probe result itself and reports probes that did not run.
+
+def test_r20_tst_01_ignores_a_false_pass_flag(tmp_path):
+    sets = fixture_sets()
+    new = max(sets["canary"], key=lambda r: r["collected_at"])
+    new["payload"]["probes"][1].update(expected="deny/tool_not_in_manifest", observed="allow/within_manifest",
+                                       reasons=["within_manifest"])
+    new["payload"]["probes"][1]["pass"] = True
+    rehash(new)
+    c = _status(tmp_path, sets, "AGT-TST-01")
+    assert c["status"] == "FAIL"
+    assert c["offending"][0]["probe"] == "canary_irreversible"
+
+
+def test_r20_tst_01_reason_wrong_is_a_failure(tmp_path):
+    sets = fixture_sets()
+    new = max(sets["canary"], key=lambda r: r["collected_at"])
+    new["payload"]["probes"][1].update(expected="deny/canary_irreversible_forbidden", observed="deny/policy_error",
+                                       reasons=["policy_error"])
+    rehash(new)
+    assert _status(tmp_path, sets, "AGT-TST-01")["status"] == "FAIL"
+
+
+def test_r20_tst_01_reason_names_probes_not_run(tmp_path):
+    sets = fixture_sets()
+    new = max(sets["canary"], key=lambda r: r["collected_at"])
+    new["payload"]["not_run"] = [{"probe": "egress_direct_ip", "reason": "no cluster"}]
+    rehash(new)
+    c = _status(tmp_path, sets, "AGT-TST-01")
+    assert c["status"] == "PASS"
+    assert "1 probe(s) not run: egress_direct_ip" in c["reason"]

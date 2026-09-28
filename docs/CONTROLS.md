@@ -181,7 +181,7 @@ No SCF row fits this check.
 ### AGT-TST-01 Canary probes pass daily
 
 - Question: Did a canary run in the last 24 hours and did every probe pass?
-- Target: The newest canary record is at most 24 hours old, all_pass is true, and every probe has pass true.
+- Target: The newest canary record is at most 24 hours old, all_pass is true, and every probe passes. The engine computes each probe result from expected and observed, and it also needs the pass flag to be true. Probes in not_run are listed in the result reason. They do not count as passed.
 - Evidence kinds: canary
 - Supporting kinds: none
 - Max age: 24 hours

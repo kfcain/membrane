@@ -152,6 +152,8 @@ def evaluate_check(check: Check, records: list[dict], registry: dict, now: datet
     else:
         result["status"] = "PASS"
         result["reason"] = f"0 offending items out of {outcome.examined} examined"
+    if outcome.notes:
+        result["reason"] += "; " + "; ".join(outcome.notes)
     return result
 
 

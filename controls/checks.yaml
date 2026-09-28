@@ -177,7 +177,9 @@ checks:
     supporting_kinds: []
     max_age_hours: 24
     target: >-
-      The newest canary record is at most 24 hours old, all_pass is true, and every probe has pass true.
+      The newest canary record is at most 24 hours old, all_pass is true, and every probe passes. The
+      engine computes each probe result from expected and observed, and it also needs the pass flag to be
+      true. Probes in not_run are listed in the result reason. They do not count as passed.
     remediation: >-
       Fix the policy or gateway path that let the listed probe through, then rerun the canary.
     controls:
