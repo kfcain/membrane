@@ -21,7 +21,9 @@ metadata:
     policies.kyverno.io/description: >-
       An agent workload must name its manifest hash and tier, pin every image
       by digest, use a dedicated service account, and match the registry.
-      Tier 3 and tier 4 agents must not mount a service account token.
+      The registry binds the hash, namespace, service account, tier, and
+      image digests. Tier 3 and tier 4 agents (by label or by registry) must
+      not mount a service account token.
     pod-policies.kyverno.io/autogen-controllers: none
 spec:
   background: false
@@ -120,9 +122,21 @@ spec:
           - key: "{{ request.object.metadata.labels.\"membrane.io/agent-id\" || '' }}"
             operator: NotEquals
             value: ""
+        any:
           - key: "{{ request.object.metadata.labels.\"membrane.io/tier\" || '' }}"
             operator: AnyIn
             value: ["3", "4"]
+          - key: "{{ binding.tier || '' }}"
+            operator: AnyIn
+            value: ["3", "4"]
+      context:
+        - name: registry
+          configMap:
+            name: membrane-registry
+            namespace: membrane-system
+        - name: binding
+          variable:
+            jmesPath: "parse_json(lookup(registry.data || `{}`, request.object.metadata.labels.\"membrane.io/agent-id\" || '') || '{}')"
       validate:
         failureAction: Enforce
         message: Tier 3 and tier 4 agent pods must set automountServiceAccountToken to false.
@@ -148,24 +162,67 @@ spec:
           configMap:
             name: membrane-registry
             namespace: membrane-system
-        - name: registeredsha
+        - name: binding
           variable:
-            jmesPath: "lookup(registry.data || `{}`, request.object.metadata.labels.\"membrane.io/agent-id\") || ''"
+            jmesPath: "parse_json(lookup(registry.data || `{}`, request.object.metadata.labels.\"membrane.io/agent-id\" || '') || '{}')"
       validate:
         failureAction: Enforce
         message: >-
-          Agent {{ request.object.metadata.labels."membrane.io/agent-id" }} is not in the
-          membrane-registry ConfigMap, or its membrane.io/manifest-sha256 annotation does not
-          match the registered manifest hash.
+          Agent {{ request.object.metadata.labels."membrane.io/agent-id" }} does not match its entry in the
+          membrane-registry ConfigMap. The agent must be registered, and the manifest hash annotation,
+          namespace, serviceAccountName, and membrane.io/tier label must equal the registered values
+          (namespace {{ binding.namespace || '<none>' }}, service account {{ binding.service_account || '<none>' }},
+          tier {{ binding.tier || '<none>' }}).
         deny:
           conditions:
             any:
-              - key: "{{ registeredsha }}"
+              - key: "{{ binding.sha256 || '' }}"
                 operator: Equals
                 value: ""
-              - key: "{{ registeredsha }}"
+              - key: "{{ binding.sha256 || '' }}"
                 operator: NotEquals
                 value: "{{ request.object.metadata.annotations.\"membrane.io/manifest-sha256\" || '' }}"
+              - key: "{{ binding.namespace || '' }}"
+                operator: NotEquals
+                value: "{{ request.namespace || request.object.metadata.namespace || '' }}"
+              - key: "{{ binding.service_account || '' }}"
+                operator: NotEquals
+                value: "{{ request.object.spec.serviceAccountName || '' }}"
+              - key: "{{ binding.tier || '' }}"
+                operator: NotEquals
+                value: "{{ request.object.metadata.labels.\"membrane.io/tier\" || '' }}"
+
+    - name: pod-image-registered
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      preconditions:
+        all:
+          - key: "{{ request.object.metadata.labels.\"membrane.io/agent-id\" || '' }}"
+            operator: NotEquals
+            value: ""
+      context:
+        - name: registry
+          configMap:
+            name: membrane-registry
+            namespace: membrane-system
+        - name: binding
+          variable:
+            jmesPath: "parse_json(lookup(registry.data || `{}`, request.object.metadata.labels.\"membrane.io/agent-id\" || '') || '{}')"
+      validate:
+        failureAction: Enforce
+        message: >-
+          Every container image in agent {{ request.object.metadata.labels."membrane.io/agent-id" }} must carry a
+          digest that the membrane-registry ConfigMap lists for that agent.
+        foreach:
+          - list: "request.object.spec.[ephemeralContainers, initContainers, containers][]"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ contains(binding.image_digests || `[]`, regex_replace_all('^[^@]*@', element.image || '', '')) }}"
+                    operator: Equals
+                    value: false
 
     # ----------------------------------------------------------- Deployment
     # A Deployment is an agent workload when its pod template carries the
@@ -263,9 +320,21 @@ spec:
           - key: "{{ request.object.spec.template.metadata.labels.\"membrane.io/agent-id\" || '' }}"
             operator: NotEquals
             value: ""
+        any:
           - key: "{{ request.object.spec.template.metadata.labels.\"membrane.io/tier\" || '' }}"
             operator: AnyIn
             value: ["3", "4"]
+          - key: "{{ binding.tier || '' }}"
+            operator: AnyIn
+            value: ["3", "4"]
+      context:
+        - name: registry
+          configMap:
+            name: membrane-registry
+            namespace: membrane-system
+        - name: binding
+          variable:
+            jmesPath: "parse_json(lookup(registry.data || `{}`, request.object.spec.template.metadata.labels.\"membrane.io/agent-id\" || '') || '{}')"
       validate:
         failureAction: Enforce
         message: Tier 3 and tier 4 agent Deployments must set automountServiceAccountToken to false in the pod template.
@@ -291,21 +360,64 @@ spec:
           configMap:
             name: membrane-registry
             namespace: membrane-system
-        - name: registeredsha
+        - name: binding
           variable:
-            jmesPath: "lookup(registry.data || `{}`, request.object.spec.template.metadata.labels.\"membrane.io/agent-id\") || ''"
+            jmesPath: "parse_json(lookup(registry.data || `{}`, request.object.spec.template.metadata.labels.\"membrane.io/agent-id\" || '') || '{}')"
       validate:
         failureAction: Enforce
         message: >-
-          Agent {{ request.object.spec.template.metadata.labels."membrane.io/agent-id" }} is not in the
-          membrane-registry ConfigMap, or its membrane.io/manifest-sha256 annotation does not
-          match the registered manifest hash.
+          Agent {{ request.object.spec.template.metadata.labels."membrane.io/agent-id" }} does not match its entry in the
+          membrane-registry ConfigMap. The agent must be registered, and the manifest hash annotation,
+          namespace, serviceAccountName, and membrane.io/tier label must equal the registered values
+          (namespace {{ binding.namespace || '<none>' }}, service account {{ binding.service_account || '<none>' }},
+          tier {{ binding.tier || '<none>' }}).
         deny:
           conditions:
             any:
-              - key: "{{ registeredsha }}"
+              - key: "{{ binding.sha256 || '' }}"
                 operator: Equals
                 value: ""
-              - key: "{{ registeredsha }}"
+              - key: "{{ binding.sha256 || '' }}"
                 operator: NotEquals
                 value: "{{ request.object.spec.template.metadata.annotations.\"membrane.io/manifest-sha256\" || '' }}"
+              - key: "{{ binding.namespace || '' }}"
+                operator: NotEquals
+                value: "{{ request.namespace || request.object.metadata.namespace || '' }}"
+              - key: "{{ binding.service_account || '' }}"
+                operator: NotEquals
+                value: "{{ request.object.spec.template.spec.serviceAccountName || '' }}"
+              - key: "{{ binding.tier || '' }}"
+                operator: NotEquals
+                value: "{{ request.object.spec.template.metadata.labels.\"membrane.io/tier\" || '' }}"
+
+    - name: deployment-image-registered
+      match:
+        any:
+          - resources:
+              kinds: [Deployment]
+      preconditions:
+        all:
+          - key: "{{ request.object.spec.template.metadata.labels.\"membrane.io/agent-id\" || '' }}"
+            operator: NotEquals
+            value: ""
+      context:
+        - name: registry
+          configMap:
+            name: membrane-registry
+            namespace: membrane-system
+        - name: binding
+          variable:
+            jmesPath: "parse_json(lookup(registry.data || `{}`, request.object.spec.template.metadata.labels.\"membrane.io/agent-id\" || '') || '{}')"
+      validate:
+        failureAction: Enforce
+        message: >-
+          Every container image in agent {{ request.object.spec.template.metadata.labels."membrane.io/agent-id" }} must carry a
+          digest that the membrane-registry ConfigMap lists for that agent.
+        foreach:
+          - list: "request.object.spec.template.spec.[initContainers, containers][]"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ contains(binding.image_digests || `[]`, regex_replace_all('^[^@]*@', element.image || '', '')) }}"
+                    operator: Equals
+                    value: false

@@ -1,6 +1,8 @@
 # Membrane admission rules in Rego, for OPA and Gatekeeper users.
-# The rules match policy/admission/kyverno. One rule is extra: the tier label
-# must equal the registered tier (the Kyverno ConfigMap holds only the hash).
+# The rules match policy/admission/kyverno. Both bind a pod to its manifest:
+# the hash annotation, the namespace, the service account, the tier label, and
+# the image digest of every container (containers, initContainers, and
+# ephemeralContainers) must equal the registry values.
 #
 # Input. The policy accepts three shapes:
 #   1. An AdmissionReview:           input.request.object  (OPA kube-mgmt, plain webhooks)
@@ -10,9 +12,12 @@
 # Supported kinds: Pod, Deployment, StatefulSet, DaemonSet, ReplicaSet, Job, CronJob.
 # The policy checks the pod template for controllers.
 #
-# Registry. The policy reads data.membrane.manifests (the generated data.json).
-# If that is absent, it reads the synced ConfigMap membrane-system/membrane-registry
-# from data.inventory (Gatekeeper sync). With neither, every agent is unregistered.
+# Registry. The policy reads data.membrane.manifests (the generated data.json):
+# sha256, tier, and k8s.{namespace, service_account, image_digests}. If that is
+# absent, it reads the synced ConfigMap membrane-system/membrane-registry from
+# data.inventory (Gatekeeper sync). Each ConfigMap value is a JSON string with
+# sha256, tier, namespace, service_account, and image_digests. With neither,
+# every agent is unregistered. A missing binding field denies (fail closed).
 #
 # Namespace labels. The policy reads them from data.inventory.cluster.v1.Namespace
 # (Gatekeeper sync) or data.kubernetes.namespaces (kube-mgmt replication).
@@ -117,16 +122,38 @@ manifest_sha := object.get(annotations, sha_annotation, "")
 # Registry and namespace data
 # ---------------------------------------------------------------------------
 
-registered_sha(id) := sha if {
-	sha := data.membrane.manifests[id].sha256
-	is_string(sha)
-} else := sha if {
+# binding(id): {sha256, tier (string), namespace, service_account, image_digests}.
+binding(id) := b if {
+	m := data.membrane.manifests[id]
+	is_object(m)
+	k := object.get(m, "k8s", {})
+	b := {
+		"sha256": object.get(m, "sha256", null),
+		"tier": sprintf("%v", [object.get(m, "tier", "")]),
+		"namespace": object.get(k, "namespace", null),
+		"service_account": object.get(k, "service_account", null),
+		"image_digests": object.get(k, "image_digests", []),
+	}
+} else := b if {
 	not data.membrane.manifests
-	sha := data.inventory.namespace["membrane-system"].v1.ConfigMap["membrane-registry"].data[id]
-	is_string(sha)
+	raw := data.inventory.namespace["membrane-system"].v1.ConfigMap["membrane-registry"].data[id]
+	is_string(raw)
+	e := json.unmarshal(raw)
+	is_object(e)
+	b := {
+		"sha256": object.get(e, "sha256", null),
+		"tier": object.get(e, "tier", null),
+		"namespace": object.get(e, "namespace", null),
+		"service_account": object.get(e, "service_account", null),
+		"image_digests": object.get(e, "image_digests", []),
+	}
 }
 
-registered_tier(id) := data.membrane.manifests[id].tier
+registered_sha(id) := sha if {
+	sha := binding(id).sha256
+	is_string(sha)
+	sha != ""
+}
 
 namespace_labels := l if {
 	l := data.inventory.cluster.v1.Namespace[namespace].metadata.labels
@@ -172,11 +199,18 @@ deny contains sprintf("%s: serviceAccountName must name a dedicated account, not
 	object.get(pod_spec, "serviceAccountName", "") in {"", "default"}
 }
 
-deny contains sprintf("%s: tier %s agents must set automountServiceAccountToken to false", [subject, tier]) if {
+# The automount rule applies when the tier label or the registered tier is 3 or 4.
+deny contains sprintf("%s: tier %s agents must set automountServiceAccountToken to false", [subject, t]) if {
 	is_agent
-	tier in {"3", "4"}
+	some t in {tier, registered_tier_string(agent_id)}
+	t in {"3", "4"}
 	object.get(pod_spec, "automountServiceAccountToken", null) != false
 }
+
+registered_tier_string(id) := t if {
+	t := binding(id).tier
+	is_string(t)
+} else := ""
 
 deny contains sprintf("%s: agent %q is not in the membrane registry", [subject, agent_id]) if {
 	is_agent
@@ -191,9 +225,45 @@ deny contains sprintf("%s: annotation %s does not match the registered manifest 
 
 deny contains sprintf("%s: label %s=%s does not match the registered tier %v for %q", [subject, tier_label, tier, want, agent_id]) if {
 	is_agent
-	want := registered_tier(agent_id)
-	tier != sprintf("%v", [want])
+	registered_sha(agent_id)
+	want := binding(agent_id).tier
+	tier != want
 }
+
+deny contains sprintf("%s: namespace %q does not match the registered namespace %v for %q", [subject, namespace, want, agent_id]) if {
+	is_agent
+	registered_sha(agent_id)
+	want := binding(agent_id).namespace
+	namespace != want
+}
+
+deny contains sprintf("%s: serviceAccountName %q does not match the registered service account %v for %q", [subject, sa, want, agent_id]) if {
+	is_agent
+	registered_sha(agent_id)
+	want := binding(agent_id).service_account
+	sa := object.get(pod_spec, "serviceAccountName", "")
+	sa != want
+}
+
+image_digest(image) := d if {
+	is_string(image)
+	parts := regex.find_all_string_submatch_n(`@(sha256:[a-f0-9]{64})$`, image, 1)
+	count(parts) == 1
+	d := parts[0][1]
+} else := ""
+
+deny contains sprintf("%s: container %q image %q is not a registered image digest for %q", [subject, object.get(c, "name", "<unnamed>"), image, agent_id]) if {
+	is_agent
+	registered_sha(agent_id)
+	allowed_digests := binding(agent_id).image_digests
+	some c in containers
+	image := object.get(c, "image", "")
+	not image_digest(image) in registered_digest_set(allowed_digests)
+}
+
+registered_digest_set(l) := {d | some d in l; is_string(d); d != ""} if is_array(l)
+
+else := set()
 
 # ---------------------------------------------------------------------------
 # Unregistered agent workloads in agent namespaces

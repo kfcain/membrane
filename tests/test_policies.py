@@ -117,6 +117,7 @@ def test_authz_killed_override(tmp_path):
 
 def test_runtime_testdata_matches_registry():
     """policy/runtime/testdata/data.json must follow the registry (contract section 3 shape)."""
+    from membrane.gen.generate import k8s_binding
     from membrane.manifest import load_registry
 
     want = {}
@@ -132,8 +133,37 @@ def test_runtime_testdata_matches_registry():
                 for t in s["tools"]
             },
         }
+        if s["runtime"]["type"] == "k8s":
+            want[aid]["k8s"] = k8s_binding(m)
     got = json.loads(RUNTIME_DATA.read_text())["membrane"]["manifests"]
     assert got == want, "policy/runtime/testdata/data.json is stale; rebuild it from the registry"
+
+
+def test_kyverno_values_mock_matches_generated_configmap():
+    """R-15: every rule that loads the registry ConfigMap gets the generated data in the CLI mock."""
+    import yaml
+    cm = yaml.safe_load((REPO / "out" / "generated" / "k8s" / "membrane-registry.configmap.yaml").read_text())
+    values = yaml.safe_load((POLICY / "admission" / "kyverno" / "tests" / "values.yaml").read_text())
+    policy = yaml.safe_load((POLICY / "admission" / "kyverno" / "membrane-agent-workloads.yaml").read_text())
+    loaders = {r["name"] for r in policy["spec"]["rules"]
+               if any(c.get("configMap", {}).get("name") == "membrane-registry" for c in r.get("context", []))}
+    mocked = {r["name"]: r["values"]["registry.data"] for p in values["policies"] for r in p["rules"]}
+    assert set(mocked) == loaders, "rerun python scripts/sync_kyverno_values.py"
+    for name, data in mocked.items():
+        assert data == cm["data"], f"{name}: stale registry mock; rerun python scripts/sync_kyverno_values.py"
+
+
+def test_registry_configmap_binds_k8s_fields():
+    """R-15: each ConfigMap value carries hash, tier, namespace, service account, and image digests."""
+    import yaml
+    from membrane.manifest import load_registry
+    cm = yaml.safe_load((REPO / "out" / "generated" / "k8s" / "membrane-registry.configmap.yaml").read_text())
+    for aid, m in load_registry().items():
+        entry = json.loads(cm["data"][aid])
+        rt = m.spec["runtime"]
+        assert entry == {"sha256": m.sha256, "tier": str(m.tier), "namespace": rt["namespace"],
+                         "service_account": rt["service_account"],
+                         "image_digests": [rt["image"].split("@", 1)[1]]}
 
 
 # ------------------------------------------------------------------ conftest

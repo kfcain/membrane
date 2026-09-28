@@ -15,7 +15,9 @@ What it does:
   proxy rule that FQDN policy needs.
 - Writes one quarantine NetworkPolicy per agent namespace. The agent policies
   exclude pods labeled membrane.io/quarantine=true, so that label cuts all traffic.
-- Writes the membrane-registry ConfigMap (active agent id to manifest hash).
+- Writes the membrane-registry ConfigMap. One key per active agent. The value
+  is JSON with the manifest hash, tier, namespace, service account, and image
+  digests. Admission binds each pod to these values.
 - `--check` regenerates in memory and compares with the files on disk. It exits 1 on drift.
 - Every run writes one `generation` evidence record (mode "live").
 

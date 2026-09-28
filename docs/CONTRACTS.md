@@ -52,7 +52,9 @@ Data document (the generator writes `out/generated/opa/data.json`; the gateway a
   "membrane": {
     "manifests": { "<agent_id>": { "sha256": "<hex>", "tier": 3, "status": "active", "canary": false,
                                    "requires_delegator": true, "approval_required_for": ["irreversible"],
-                                   "tools": { "<tool name>": { "scope": "finance:write", "irreversible": true, "rate_limit_per_min": 5 } } } },
+                                   "tools": { "<tool name>": { "scope": "finance:write", "irreversible": true, "rate_limit_per_min": 5 } },
+                                   "k8s": { "namespace": "agents-finance", "service_account": "invoice-reconciler",
+                                            "image_digests": ["sha256:<hex>"] } } },
     "overrides": { "<agent_id>": { "mode": "throttled|restricted|quarantined|killed", "set_at": "<rfc3339>", "reason": "..." } }
   }
 }
@@ -71,6 +73,10 @@ Input:
   "approval": { "verified": true, "action_sha256": "<hex>", "approver": "bob@example.com", "approval_id": "<uuid>" }
 }
 ```
+
+`k8s` is present only for agents with runtime type `k8s`. The runtime policy does not read it. The Rego admission policy reads it to bind a pod to its manifest.
+
+Admission registry ConfigMap `membrane-system/membrane-registry` (written by `membrane gen`): one key per active agent id. The value is a JSON string with keys `sha256`, `tier` (a string, for example `"3"`), `namespace`, `service_account`, and `image_digests` (a list of `sha256:<hex>`). Kyverno and the Rego fallback deny a pod when any of these values differ from the pod, or when a field is missing.
 
 `approval` is `null` when the caller sends no token. The gateway verifies the approval token signature before the call to OPA. OPA never sees a secret.
 

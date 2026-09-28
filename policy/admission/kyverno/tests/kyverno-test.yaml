@@ -477,3 +477,183 @@ results:
   resources:
   - plain-deploy-in-other-ns
   result: skip
+- policy: membrane-agent-workloads
+  rule: pod-image-registered
+  kind: Pod
+  resources:
+  - good-kb-reader
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-image-registered
+  kind: Pod
+  resources:
+  - good-invoice-reconciler
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-image-registered
+  kind: Pod
+  resources:
+  - good-code-runner
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-image-registered
+  kind: Pod
+  resources:
+  - ok-image-registered-digest-from-mirror
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-registered
+  kind: Pod
+  resources:
+  - ok-image-registered-digest-from-mirror
+  result: pass
+- policy: membrane-agent-workloads
+  rule: deployment-image-registered
+  kind: Deployment
+  resources:
+  - good-code-runner-deploy
+  result: pass
+- policy: membrane-agent-workloads
+  rule: deployment-image-registered
+  kind: Deployment
+  resources:
+  - good-kb-reader-deploy
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-image-registered
+  kind: Pod
+  resources:
+  - plain-in-other-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: pod-image-registered
+  kind: Pod
+  resources:
+  - plain-in-agent-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: deployment-image-registered
+  kind: Deployment
+  resources:
+  - plain-deploy-in-other-ns
+  result: skip
+- policy: membrane-agent-workloads
+  rule: pod-registered
+  kind: Pod
+  resources:
+  - ir-as-tier1
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-image-registered
+  kind: Pod
+  resources:
+  - ir-as-tier1
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-no-token-automount-tier3
+  kind: Pod
+  resources:
+  - ir-as-tier1
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-registered
+  kind: Pod
+  resources:
+  - bad-registry-namespace
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-image-registered
+  kind: Pod
+  resources:
+  - bad-registry-namespace
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-registered
+  kind: Pod
+  resources:
+  - bad-registry-service-account
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-image-registered
+  kind: Pod
+  resources:
+  - bad-registry-service-account
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-registered
+  kind: Pod
+  resources:
+  - bad-registry-tier
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-image-registered
+  kind: Pod
+  resources:
+  - bad-registry-tier
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-image-registered
+  kind: Pod
+  resources:
+  - bad-image-not-registered
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-registered
+  kind: Pod
+  resources:
+  - bad-image-not-registered
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-image-registered
+  kind: Pod
+  resources:
+  - bad-init-image-not-registered
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-registered
+  kind: Pod
+  resources:
+  - bad-init-image-not-registered
+  result: pass
+- policy: membrane-agent-workloads
+  rule: pod-image-registered
+  kind: Pod
+  resources:
+  - bad-ephemeral-image-not-registered
+  result: fail
+- policy: membrane-agent-workloads
+  rule: pod-registered
+  kind: Pod
+  resources:
+  - bad-ephemeral-image-not-registered
+  result: pass
+- policy: membrane-agent-workloads
+  rule: deployment-registered
+  kind: Deployment
+  resources:
+  - bad-deploy-registry-service-account
+  result: fail
+- policy: membrane-agent-workloads
+  rule: deployment-image-registered
+  kind: Deployment
+  resources:
+  - bad-deploy-image-not-registered
+  result: fail
+- policy: membrane-agent-workloads
+  rule: deployment-registered
+  kind: Deployment
+  resources:
+  - bad-deploy-image-not-registered
+  result: pass
+- policy: membrane-agent-workloads
+  rule: deployment-no-token-automount-tier3
+  kind: Deployment
+  resources:
+  - bad-deploy-tier1-label-registered-tier4
+  result: fail
+- policy: membrane-agent-workloads
+  rule: deployment-registered
+  kind: Deployment
+  resources:
+  - bad-deploy-tier1-label-registered-tier4
+  result: fail

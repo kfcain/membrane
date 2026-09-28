@@ -10,13 +10,29 @@ sha_inv := "4cc66320962fcb4d949a49a77acbdf20cf0506ecfd5d9b9d750b7b60361b3a18"
 
 digest := "@sha256:1111111111111111111111111111111111111111111111111111111111111111"
 
+digest_inv := "@sha256:3333333333333333333333333333333333333333333333333333333333333333"
+
 manifests := {
-	"kb-reader": {"sha256": sha_kb, "tier": 1},
-	"invoice-reconciler": {"sha256": sha_inv, "tier": 3},
+	"kb-reader": {"sha256": sha_kb, "tier": 1, "k8s": {
+		"namespace": "agents", "service_account": "kb-reader",
+		"image_digests": ["sha256:1111111111111111111111111111111111111111111111111111111111111111"],
+	}},
+	"invoice-reconciler": {"sha256": sha_inv, "tier": 3, "k8s": {
+		"namespace": "agents-finance", "service_account": "invoice-reconciler",
+		"image_digests": ["sha256:3333333333333333333333333333333333333333333333333333333333333333"],
+	}},
 }
+
+# The same bindings as ConfigMap values (JSON strings), as `membrane gen` writes them.
+cm_entry(id) := json.marshal({
+	"sha256": manifests[id].sha256, "tier": sprintf("%v", [manifests[id].tier]),
+	"namespace": manifests[id].k8s.namespace, "service_account": manifests[id].k8s.service_account,
+	"image_digests": manifests[id].k8s.image_digests,
+})
 
 namespaces := {
 	"agents": {"metadata": {"name": "agents", "labels": {"membrane.io/agent-namespace": "true"}}},
+	"agents-finance": {"metadata": {"name": "agents-finance", "labels": {"membrane.io/agent-namespace": "true"}}},
 	"web": {"metadata": {"name": "web", "labels": {"team": "web"}}},
 }
 
@@ -37,6 +53,8 @@ kb_pod := {
 
 inv_pod := json.patch(kb_pod, [
 	{"op": "replace", "path": "/metadata/name", "value": "inv-0"},
+	{"op": "replace", "path": "/metadata/namespace", "value": "agents-finance"},
+	{"op": "replace", "path": "/spec/containers/0/image", "value": concat("", ["registry.example.com/agents/invoice-reconciler", digest_inv])},
 	{"op": "replace", "path": "/metadata/labels/membrane.io~1agent-id", "value": "invoice-reconciler"},
 	{"op": "replace", "path": "/metadata/labels/membrane.io~1tier", "value": "3"},
 	{"op": "replace", "path": "/metadata/annotations/membrane.io~1manifest-sha256", "value": sha_inv},
@@ -47,7 +65,7 @@ inv_pod := json.patch(kb_pod, [
 inv_deploy := {
 	"apiVersion": "apps/v1",
 	"kind": "Deployment",
-	"metadata": {"name": "invoice-reconciler", "namespace": "agents"},
+	"metadata": {"name": "invoice-reconciler", "namespace": "agents-finance"},
 	"spec": {
 		"selector": {"matchLabels": {"app": "inv"}},
 		"template": {"metadata": inv_pod.metadata, "spec": inv_pod.spec},
@@ -178,13 +196,13 @@ test_no_registry_data_denies if {
 }
 
 test_gatekeeper_configmap_registry if {
-	cm := {"membrane-system": {"v1": {"ConfigMap": {"membrane-registry": {"data": {"kb-reader": sha_kb}}}}}}
+	cm := {"membrane-system": {"v1": {"ConfigMap": {"membrane-registry": {"data": {"kb-reader": cm_entry("kb-reader")}}}}}}
 	d := admission.deny with input as {"review": {"operation": "CREATE", "object": kb_pod}} with data.inventory.namespace as cm
 	count(d) == 0
 }
 
 test_gatekeeper_configmap_mismatch if {
-	cm := {"membrane-system": {"v1": {"ConfigMap": {"membrane-registry": {"data": {"kb-reader": sha_inv}}}}}}
+	cm := {"membrane-system": {"v1": {"ConfigMap": {"membrane-registry": {"data": {"kb-reader": json.marshal(json.patch(json.unmarshal(cm_entry("kb-reader")), [{"op": "replace", "path": "/sha256", "value": sha_inv}]))}}}}}}
 	d := admission.deny with input as kb_pod with data.inventory.namespace as cm
 	some m in d
 	contains(m, "does not match the registered manifest hash")
@@ -226,4 +244,87 @@ test_violation_shape if {
 		with data.inventory.cluster.v1.Namespace as namespaces
 	some x in v
 	contains(x.msg, "is an agent namespace")
+}
+
+# ---- R-15: full binding of a pod to its manifest ---------------------------
+
+# The review case: invoice-reconciler labels, tier label 1, correct hash, in
+# namespace web, with another service account and an unregistered image.
+ir_as_tier1 := json.patch(inv_pod, [
+	{"op": "replace", "path": "/metadata/name", "value": "ir-as-tier1"},
+	{"op": "replace", "path": "/metadata/namespace", "value": "web"},
+	{"op": "replace", "path": "/metadata/labels/membrane.io~1tier", "value": "1"},
+	{"op": "replace", "path": "/spec/serviceAccountName", "value": "some-other-sa"},
+	{"op": "replace", "path": "/spec/containers/0/image", "value": concat("", ["evil.example.net/anything@sha256:", concat("", [x | some _ in numbers.range(1, 64); x := "9"])])},
+	{"op": "remove", "path": "/spec/automountServiceAccountToken"},
+])
+
+test_r15_review_pod_denied_on_every_field if {
+	has(ir_as_tier1, "does not match the registered tier 3")
+	has(ir_as_tier1, "does not match the registered namespace")
+	has(ir_as_tier1, "does not match the registered service account")
+	has(ir_as_tier1, "is not a registered image digest")
+	has(ir_as_tier1, "automountServiceAccountToken")
+}
+
+test_r15_review_pod_denied_with_configmap_only if {
+	cm := {"membrane-system": {"v1": {"ConfigMap": {"membrane-registry": {"data": {"invoice-reconciler": cm_entry("invoice-reconciler")}}}}}}
+	d := admission.deny with input as {"review": {"operation": "CREATE", "object": ir_as_tier1}} with data.inventory.namespace as cm
+	some m1 in d
+	contains(m1, "does not match the registered tier 3")
+	some m2 in d
+	contains(m2, "does not match the registered namespace")
+	some m3 in d
+	contains(m3, "automountServiceAccountToken")
+}
+
+test_r15_wrong_namespace if {
+	has(p([{"op": "replace", "path": "/metadata/namespace", "value": "agents-finance"}]), "does not match the registered namespace")
+}
+
+test_r15_wrong_service_account if {
+	has(p([{"op": "replace", "path": "/spec/serviceAccountName", "value": "ticket-triager"}]), "does not match the registered service account")
+}
+
+test_r15_unregistered_digest if {
+	has(p([{"op": "replace", "path": "/spec/containers/0/image", "value": concat("", ["registry.example.com/agents/kb-reader", digest_inv])}]), "is not a registered image digest")
+}
+
+test_r15_init_container_unregistered_digest if {
+	has(p([{"op": "add", "path": "/spec/initContainers", "value": [{"name": "init", "image": concat("", ["busybox", digest_inv])}]}]), "container \"init\" image")
+}
+
+test_r15_ephemeral_container_unregistered_digest if {
+	has(p([{"op": "add", "path": "/spec/ephemeralContainers", "value": [{"name": "dbg", "image": concat("", ["busybox", digest_inv])}]}]), "is not a registered image digest")
+}
+
+test_r15_registered_digest_other_repo_allowed if {
+	# The digest names the content. The same content from a mirror is the same image.
+	count(denies(p([{"op": "replace", "path": "/spec/containers/0/image", "value": concat("", ["mirror.example.com/kb", digest])}]))) == 0
+}
+
+test_r15_binding_without_k8s_fields_denies if {
+	d := admission.deny with input as kb_pod
+		with data.membrane.manifests as {"kb-reader": {"sha256": sha_kb, "tier": 1}}
+	some m1 in d
+	contains(m1, "does not match the registered namespace")
+	some m2 in d
+	contains(m2, "is not a registered image digest")
+}
+
+test_r15_legacy_configmap_hash_only_denies if {
+	cm := {"membrane-system": {"v1": {"ConfigMap": {"membrane-registry": {"data": {"kb-reader": sha_kb}}}}}}
+	d := admission.deny with input as kb_pod with data.inventory.namespace as cm
+	some m in d
+	contains(m, "not in the membrane registry")
+}
+
+test_r15_tier_label_1_registered_3_needs_automount_false if {
+	has(
+		json.patch(inv_pod, [
+			{"op": "replace", "path": "/metadata/labels/membrane.io~1tier", "value": "1"},
+			{"op": "remove", "path": "/spec/automountServiceAccountToken"},
+		]),
+		"automountServiceAccountToken",
+	)
 }

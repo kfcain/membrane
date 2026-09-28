@@ -636,3 +636,218 @@ spec:
       containers:
       - name: x
         image: nginx:latest
+---
+# R-15: a pod binds to its manifest by namespace, service account, tier, and image digest.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ir-as-tier1
+  namespace: web
+  labels:
+    membrane.io/agent-id: invoice-reconciler
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 4cc66320962fcb4d949a49a77acbdf20cf0506ecfd5d9b9d750b7b60361b3a18
+spec:
+  serviceAccountName: some-other-sa
+  containers:
+  - name: agent
+    image: evil.example.net/anything@sha256:9999999999999999999999999999999999999999999999999999999999999999
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-registry-namespace
+  namespace: agents-finance
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-registry-service-account
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: ticket-triager
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-registry-tier
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '2'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-image-not-registered
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:3333333333333333333333333333333333333333333333333333333333333333
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-init-image-not-registered
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+  initContainers:
+  - name: init
+    image: registry.example.com/tools/init@sha256:3333333333333333333333333333333333333333333333333333333333333333
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-ephemeral-image-not-registered
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+  ephemeralContainers:
+  - name: dbg
+    image: registry.example.com/tools/debug@sha256:3333333333333333333333333333333333333333333333333333333333333333
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ok-image-registered-digest-from-mirror
+  namespace: agents
+  labels:
+    membrane.io/agent-id: kb-reader
+    membrane.io/tier: '1'
+  annotations:
+    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+spec:
+  serviceAccountName: kb-reader
+  containers:
+  - name: agent
+    image: mirror.example.com/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-deploy-registry-service-account
+  namespace: agents-sandbox
+  labels:
+    app: bad-deploy-registry-service-account
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bad-deploy-registry-service-account
+  template:
+    metadata:
+      labels:
+        app: bad-deploy-registry-service-account
+        membrane.io/agent-id: code-runner
+        membrane.io/tier: '4'
+      annotations:
+        membrane.io/manifest-sha256: 9d6e3c3e050ecf7a938ac46b2530cf2ca2168085b88c577fe44e11184d82ae16
+    spec:
+      serviceAccountName: kb-reader
+      containers:
+      - name: agent
+        image: registry.example.com/agents/code-runner@sha256:4444444444444444444444444444444444444444444444444444444444444444
+      automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-deploy-image-not-registered
+  namespace: agents-sandbox
+  labels:
+    app: bad-deploy-image-not-registered
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bad-deploy-image-not-registered
+  template:
+    metadata:
+      labels:
+        app: bad-deploy-image-not-registered
+        membrane.io/agent-id: code-runner
+        membrane.io/tier: '4'
+      annotations:
+        membrane.io/manifest-sha256: 9d6e3c3e050ecf7a938ac46b2530cf2ca2168085b88c577fe44e11184d82ae16
+    spec:
+      serviceAccountName: code-runner
+      containers:
+      - name: agent
+        image: registry.example.com/agents/code-runner@sha256:1111111111111111111111111111111111111111111111111111111111111111
+      automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-deploy-tier1-label-registered-tier4
+  namespace: agents-sandbox
+  labels:
+    app: bad-deploy-tier1-label-registered-tier4
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bad-deploy-tier1-label-registered-tier4
+  template:
+    metadata:
+      labels:
+        app: bad-deploy-tier1-label-registered-tier4
+        membrane.io/agent-id: code-runner
+        membrane.io/tier: '1'
+      annotations:
+        membrane.io/manifest-sha256: 9d6e3c3e050ecf7a938ac46b2530cf2ca2168085b88c577fe44e11184d82ae16
+    spec:
+      serviceAccountName: code-runner
+      containers:
+      - name: agent
+        image: registry.example.com/agents/code-runner@sha256:4444444444444444444444444444444444444444444444444444444444444444

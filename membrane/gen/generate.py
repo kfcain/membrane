@@ -5,6 +5,7 @@ Every output is deterministic: sorted keys, stable ordering, trailing newline.
 from __future__ import annotations
 
 import json
+import re
 from typing import Iterable
 
 import yaml
@@ -37,6 +38,25 @@ def registry_sha256(reg: dict[str, Manifest]) -> str:
     return sha256_hex(canonical_json({k: m.sha256 for k, m in sorted(reg.items())}))
 
 
+_DIGEST_RE = re.compile(r"@(sha256:[a-f0-9]{64})$")
+
+
+def image_digests(m: Manifest) -> list[str]:
+    """Allowed image digests for a k8s agent. An image with no valid digest gives an empty list,
+    so admission denies every image (fail closed)."""
+    match = _DIGEST_RE.search(m.spec["runtime"].get("image") or "")
+    return [match.group(1)] if match else []
+
+
+def k8s_binding(m: Manifest) -> dict | None:
+    """The fields that bind a pod to its manifest at admission. None for a non-k8s runtime."""
+    rt = m.spec["runtime"]
+    if rt["type"] != "k8s":
+        return None
+    return {"namespace": rt.get("namespace") or "", "service_account": rt.get("service_account") or "",
+            "image_digests": image_digests(m)}
+
+
 def opa_data(reg: dict[str, Manifest]) -> dict:
     manifests = {}
     for aid, m in sorted(reg.items()):
@@ -53,6 +73,9 @@ def opa_data(reg: dict[str, Manifest]) -> dict:
             "approval_required_for": sorted(s["approval"]["required_for"]),
             "tools": tools,
         }
+        binding = k8s_binding(m)
+        if binding is not None:
+            manifests[aid]["k8s"] = binding
     return {"membrane": {"manifests": manifests}}
 
 
@@ -150,12 +173,23 @@ def quarantine_policy(namespace: str) -> dict:
     }
 
 
+def registry_entry(m: Manifest) -> str:
+    """One ConfigMap value per agent: compact JSON with sorted keys. The tier is a string,
+    so it compares directly with the membrane.io/tier label. A non-k8s agent has no
+    namespace, service account, or image digests, so admission denies its pods."""
+    entry = {"sha256": m.sha256, "tier": str(m.tier)}
+    binding = k8s_binding(m)
+    if binding is not None:
+        entry.update(binding)
+    return json.dumps(entry, sort_keys=True, separators=(",", ":"))
+
+
 def registry_configmap(reg: dict[str, Manifest]) -> dict:
     return {
         "apiVersion": "v1", "kind": "ConfigMap",
         "metadata": {"name": "membrane-registry", "namespace": "membrane-system",
                      "labels": {"app.kubernetes.io/managed-by": "membrane"}},
-        "data": {aid: m.sha256 for aid, m in sorted(reg.items()) if m.spec["status"] == "active"},
+        "data": {aid: registry_entry(m) for aid, m in sorted(reg.items()) if m.spec["status"] == "active"},
     }
 
 

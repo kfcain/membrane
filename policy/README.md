@@ -92,14 +92,17 @@ Two ClusterPolicies. Each rule uses `validate.failureAction: Enforce`. Kyverno 1
 | `*-tier-label` | Label `membrane.io/tier` is `1`, `2`, `3`, or `4` |
 | `*-image-digest` | Each container, init container, and ephemeral container image ends in `@sha256:` and 64 hex characters |
 | `*-service-account` | `serviceAccountName` is set and is not `default` |
-| `*-no-token-automount-tier3` | Tier 3 and 4: `automountServiceAccountToken` is `false` |
-| `*-registered` | ConfigMap `membrane-system/membrane-registry` has a key equal to the agent id. Its value equals the pod annotation. |
+| `*-no-token-automount-tier3` | Tier 3 and 4: `automountServiceAccountToken` is `false`. The rule applies when the tier label is 3 or 4, or when the registered tier is 3 or 4 |
+| `*-registered` | ConfigMap `membrane-system/membrane-registry` has a key equal to the agent id. The value binds the pod: the manifest hash equals the annotation, the namespace equals the pod namespace, the service account equals `serviceAccountName`, and the tier equals the `membrane.io/tier` label |
+| `*-image-registered` | The digest of each container image (Pods: containers, init containers, and ephemeral containers; Deployments: containers and init containers) is in the registered `image_digests` list. The digest decides, not the registry host |
+
+Registry ConfigMap layout. `membrane gen` writes one key per active agent. The value is a JSON string: `{"image_digests": ["sha256:<hex>"], "namespace": "...", "service_account": "...", "sha256": "<manifest hash>", "tier": "3"}`. A missing field denies. A value in the old layout (a bare hash) denies, because it does not parse as a JSON object.
 
 `membrane-unregistered-agents` denies Pods and Deployments without the `membrane.io/agent-id` label in a namespace with label `membrane.io/agent-namespace: "true"`.
 
 The rules select agent workloads with preconditions, not with a `match` selector. A precondition miss gives a `skip` result, and `kyverno test` can check it. If the ConfigMap is not present, Kyverno cannot load the rule context. The rule then gives an error, and the webhook failure policy decides. Set the webhook failure policy to `Fail`.
 
-Tests: `admission/kyverno/tests/` has `kyverno-test.yaml`, `resources.yaml` (34 resources), and `values.yaml`. The values file supplies the ConfigMap data and the namespace labels, because the CLI has no cluster.
+Tests: `admission/kyverno/tests/` has `kyverno-test.yaml`, `resources.yaml` (45 resources), and `values.yaml`. The values file supplies the ConfigMap data and the namespace labels, because the CLI has no cluster. After a registry change, run `membrane gen` and then `python scripts/sync_kyverno_values.py`. A pytest check fails when the mock and the generated ConfigMap differ.
 
 ```sh
 policy/admission/kyverno/check.sh
@@ -113,12 +116,9 @@ Package `membrane.admission`. Output: `deny` (set of messages), `violation` (set
 
 Input can have three shapes. The policy finds the object in `input.request.object` (AdmissionReview), then `input.review.object` (Gatekeeper), then `input` (a plain object). It checks Pods and the pod template of Deployments, StatefulSets, DaemonSets, ReplicaSets, Jobs, and CronJobs. It skips `DELETE` requests.
 
-Registry data comes from `data.membrane.manifests`. If that is absent, the policy reads the synced ConfigMap `membrane-system/membrane-registry` from `data.inventory`. Namespace labels come from `data.inventory.cluster.v1.Namespace` (Gatekeeper sync) or `data.kubernetes.namespaces` (kube-mgmt).
+Registry data comes from `data.membrane.manifests` (the generated `data.json`): `sha256`, `tier`, and `k8s.namespace`, `k8s.service_account`, `k8s.image_digests`. If that is absent, the policy reads the synced ConfigMap `membrane-system/membrane-registry` from `data.inventory` and parses each value as JSON. Both sources give the full binding, so Gatekeeper users get the tier, namespace, service account, and image rules too. Namespace labels come from `data.inventory.cluster.v1.Namespace` (Gatekeeper sync) or `data.kubernetes.namespaces` (kube-mgmt).
 
-The rules are the Kyverno rules, plus two:
-
-- The `membrane.io/tier` label must equal the registered tier. The Kyverno ConfigMap holds only the hash, so the Kyverno policy cannot check this.
-- An agent workload must have at least one container.
+The rules are the Kyverno rules, plus one: an agent workload must have at least one container. The Rego policy also checks the image digests of every controller kind it reads, not only Pods and Deployments.
 
 Gatekeeper users wrap `violation` in a ConstraintTemplate. Gatekeeper gives the policy only `data.inventory`. Sync Namespaces and the `membrane-registry` ConfigMap into the inventory.
 

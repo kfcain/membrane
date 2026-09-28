@@ -133,7 +133,8 @@ def test_runtime_gen_spire_and_k8s(reg):
     assert fqdns == sorted(reg["invoice-reconciler"].spec["egress"])
     assert cnp["spec"]["egress"][0]["toPorts"][0]["rules"]["dns"]
     cm = yaml.safe_load(out["k8s/membrane-registry.configmap.yaml"])
-    assert cm["data"] == {k: m.sha256 for k, m in reg.items() if m.spec["status"] == "active"}
+    assert set(cm["data"]) == {k for k, m in reg.items() if m.spec["status"] == "active"}
+    assert {k: json.loads(v)["sha256"] for k, v in cm["data"].items()} == {k: reg[k].sha256 for k in cm["data"]}
 
 
 def test_runtime_gen_drift(reg, tmp_path):
