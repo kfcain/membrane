@@ -1,0 +1,64 @@
+name: live-cluster
+# Live validation on a kind cluster with Cilium and Kyverno.
+# Not a required check. It runs on manual dispatch, weekly, and when the
+# live scripts, policies, or generators change. See scripts/live/run.sh.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+  push:
+    branches: [main, claude/live-cluster]
+    paths:
+      - ".github/workflows/live-cluster.yml"
+      - "scripts/live/**"
+      - "policy/admission/**"
+      - "membrane/gen/**"
+permissions:
+  contents: read
+concurrency:
+  group: live-cluster-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  live:
+    name: kind + Cilium + Kyverno probes
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      KIND_VERSION: v0.27.0
+      KUBECTL_VERSION: v1.32.3
+      CILIUM_CLI_VERSION: v0.18.3
+      CILIUM_VERSION: 1.17.4
+      KYVERNO_CHART_VERSION: 3.4.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install kind, kubectl, cilium CLI, helm
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/bin"
+          curl -sSLo "$HOME/bin/kind" "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+          curl -sSLo "$HOME/bin/kubectl" "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          curl -sSL "https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz" | tar xz -C "$HOME/bin" cilium
+          chmod +x "$HOME/bin/kind" "$HOME/bin/kubectl" "$HOME/bin/cilium"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          command -v helm || curl -sSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - name: Install membrane
+        run: pip install -e '.[dev]'
+      - name: Run live validation
+        run: scripts/live/run.sh
+      - name: Debug on failure
+        if: failure()
+        run: |
+          kubectl get pods -A -o wide || true
+          kubectl get clusterpolicy -o wide || true
+          kubectl get cnp,netpol -A || true
+          cilium status || true
+          kubectl logs -n kyverno -l app.kubernetes.io/component=admission-controller --tail=200 || true
+      - name: Upload live results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-cluster
+          path: var/live/

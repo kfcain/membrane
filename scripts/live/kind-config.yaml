@@ -1,0 +1,7 @@
+# kind cluster for the live validation workflow. Cilium replaces the default CNI.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+nodes:
+  - role: control-plane
