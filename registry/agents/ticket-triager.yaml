@@ -12,7 +12,7 @@ spec:
     namespace: agents
     service_account: ticket-triager
     image: registry.example.com/agents/ticket-triager@sha256:2222222222222222222222222222222222222222222222222222222222222222
-  model: { provider: bedrock, id: anthropic.claude-haiku, pinned: true }
+  model: { provider: bedrock, id: anthropic.claude-3-haiku-20240307-v1:0, pinned: true }
   delegation: { requires_delegator: false }
   tools:
     - { name: tickets.read, scope: tickets:read, irreversible: false, rate_limit_per_min: 120 }

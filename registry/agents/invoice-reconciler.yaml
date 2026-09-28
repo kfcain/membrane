@@ -12,7 +12,7 @@ spec:
     namespace: agents-finance
     service_account: invoice-reconciler
     image: registry.example.com/agents/invoice-reconciler@sha256:3333333333333333333333333333333333333333333333333333333333333333
-  model: { provider: bedrock, id: anthropic.claude-sonnet, pinned: true }
+  model: { provider: bedrock, id: anthropic.claude-3-5-sonnet-20240620-v1:0, pinned: true }
   delegation: { requires_delegator: true }
   tools:
     - { name: erp.read_invoices, scope: finance:read, irreversible: false, rate_limit_per_min: 60 }

@@ -12,7 +12,7 @@ spec:
     namespace: agents
     service_account: kb-reader
     image: registry.example.com/agents/kb-reader@sha256:1111111111111111111111111111111111111111111111111111111111111111
-  model: { provider: bedrock, id: anthropic.claude-sonnet, pinned: true }
+  model: { provider: bedrock, id: anthropic.claude-3-5-sonnet-20240620-v1:0, pinned: true }
   delegation: { requires_delegator: true }
   tools:
     - { name: kb.search, scope: kb:read, irreversible: false, rate_limit_per_min: 60 }

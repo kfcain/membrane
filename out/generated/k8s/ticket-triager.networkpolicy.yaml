@@ -3,7 +3,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   annotations:
-    membrane.io/manifest-sha256: 32f9fca8379a72e8951d48f25a87924c6ea16e873e44c40e66bf98da02c94d93
+    membrane.io/manifest-sha256: b92affe121f4099c9e567dd006d3cb6e667215a382f0610181e24c6ee34fdf6e
   labels:
     app.kubernetes.io/managed-by: membrane
     membrane.io/agent-id: ticket-triager

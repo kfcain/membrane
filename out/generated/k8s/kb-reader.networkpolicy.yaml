@@ -3,7 +3,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   annotations:
-    membrane.io/manifest-sha256: 0f6620a7dddf9d7bb1e67bd79d5ec2184c11a49543e2f0305bf5fe8c19efa35c
+    membrane.io/manifest-sha256: 8f1b15b1f4b156753c2935c674281bd8057285eb082fcf7ad5f8362bea56fd3e
   labels:
     app.kubernetes.io/managed-by: membrane
     membrane.io/agent-id: kb-reader

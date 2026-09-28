@@ -100,7 +100,7 @@ MET 11, PARTIAL 0, NOT MET 12.
 
 ### AGT-INV-02 No manifest drift on running agents
 
-- cluster=prod-use1-agents; namespace=agents-sandbox; name=code-runner; agent_id=code-runner; observed_sha256=9f2c4b7e1a3d5f608192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8; registry_sha256=9d6e3c3e050ecf7a938ac46b2530cf2ca2168085b88c577fe44e11184d82ae16; reason=manifest_hash_mismatch (record e7e2d7b1-9d9e-5e25-b61a-1cd898928d82)
+- cluster=prod-use1-agents; namespace=agents-sandbox; name=code-runner; agent_id=code-runner; observed_sha256=9f2c4b7e1a3d5f608192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8; registry_sha256=c66b040b5bc10e52d9a43ba59e78984abb0c05477cd7dd85f0559beb9c0cf3e9; reason=manifest_hash_mismatch (record e7e2d7b1-9d9e-5e25-b61a-1cd898928d82)
 
 ### AGT-IAM-01 No model-provider credentials outside the vault
 

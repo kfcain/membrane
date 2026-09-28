@@ -33,7 +33,7 @@ Rules for all tiers:
 
 - `apiVersion` is `membrane/v1` and `kind` is `AgentManifest`.
 - `spec.tier` is an integer from 1 to 4. `spec.status` is `active`, `suspended`, or `retired`.
-- `spec.model.pinned` is true.
+- `spec.model.pinned` is true. When the provider is not `none`, `spec.model.id` is a versioned id: it has a date (8 digits or YYYY-MM-DD), a `-vN` suffix, or an `@version` suffix. A floating alias such as `anthropic.claude-sonnet` fails.
 - Each tool name occurs one time. Each tool has a boolean `irreversible` flag.
 - For `runtime.type: k8s`: `namespace` is set, `service_account` is set and is not `default`, and `image` ends in `@sha256:` and 64 lowercase hex characters.
 

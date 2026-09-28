@@ -12,7 +12,7 @@ spec:
     namespace: agents-sandbox
     service_account: code-runner
     image: registry.example.com/agents/code-runner@sha256:4444444444444444444444444444444444444444444444444444444444444444
-  model: { provider: bedrock, id: anthropic.claude-opus, pinned: true }
+  model: { provider: bedrock, id: anthropic.claude-3-opus-20240229-v1:0, pinned: true }
   delegation: { requires_delegator: true }
   tools:
     - { name: sandbox.exec, scope: sandbox:write, irreversible: false, rate_limit_per_min: 30 }

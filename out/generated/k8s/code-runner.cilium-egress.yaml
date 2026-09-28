@@ -3,7 +3,7 @@ apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
   annotations:
-    membrane.io/manifest-sha256: 9d6e3c3e050ecf7a938ac46b2530cf2ca2168085b88c577fe44e11184d82ae16
+    membrane.io/manifest-sha256: c66b040b5bc10e52d9a43ba59e78984abb0c05477cd7dd85f0559beb9c0cf3e9
   labels:
     app.kubernetes.io/managed-by: membrane
     membrane.io/agent-id: code-runner

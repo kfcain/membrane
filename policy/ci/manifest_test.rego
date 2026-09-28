@@ -24,7 +24,7 @@ tier1 := {
 		"tier": 1,
 		"status": "active",
 		"runtime": base_runtime,
-		"model": {"provider": "p", "id": "m", "pinned": true},
+		"model": {"provider": "p", "id": "m-20240620-v1:0", "pinned": true},
 		"delegation": {"requires_delegator": true},
 		"tools": [{"name": "kb.search", "scope": "kb:read", "irreversible": false}],
 		"egress": [],
@@ -151,6 +151,23 @@ test_missing_tools_list if has_deny(patched(tier1, [{"op": "remove", "path": "/s
 test_model_unpinned if has_deny(patched(tier1, [{"op": "replace", "path": "/spec/model/pinned", "value": false}]), "model.pinned")
 
 test_model_missing if has_deny(patched(tier1, [{"op": "remove", "path": "/spec/model"}]), "model.pinned")
+
+# R-12: pinned needs a versioned model id, not a floating alias.
+test_model_pinned_alias_denied if {
+	has_deny(patched(tier1, [{"op": "replace", "path": "/spec/model/id", "value": "anthropic.claude-sonnet"}]), "versioned model id")
+	has_deny(patched(tier1, [{"op": "replace", "path": "/spec/model/id", "value": "latest"}]), "versioned model id")
+	has_deny(patched(tier1, [{"op": "replace", "path": "/spec/model/id", "value": 5}]), "versioned model id")
+}
+
+test_model_pinned_versioned_ok if {
+	not has_deny(patched(tier1, [{"op": "replace", "path": "/spec/model/id", "value": "anthropic.claude-3-5-sonnet-20240620-v1:0"}]), "versioned model id")
+	not has_deny(patched(tier1, [{"op": "replace", "path": "/spec/model/id", "value": "gpt-4o-2024-08-06"}]), "versioned model id")
+	not has_deny(patched(tier1, [{"op": "replace", "path": "/spec/model/id", "value": "my-model@3"}]), "versioned model id")
+}
+
+test_model_provider_none_exempt if {
+	not has_deny(patched(tier1, [{"op": "replace", "path": "/spec/model", "value": {"provider": "none", "id": "none", "pinned": true}}]), "versioned model id")
+}
 
 test_k8s_missing_namespace if has_deny(patched(tier1, [{"op": "remove", "path": "/spec/runtime/namespace"}]), "runtime.namespace")
 

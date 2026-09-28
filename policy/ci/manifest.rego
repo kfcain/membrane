@@ -153,6 +153,22 @@ deny contains sprintf("%s: spec.model.pinned must be true", [agent_id]) if {
 	object.get(object.get(spec, "model", {}), "pinned", false) != true
 }
 
+# A pin needs a versioned model id: a date (8 digits, or YYYY-MM-DD), a -vN
+# suffix, or an @version suffix. A floating alias is not a pin. Provider none
+# (no model) is exempt.
+versioned_model_id(id) if {
+	is_string(id)
+	regex.match(`(\d{8}|\d{4}-\d{2}-\d{2}|-v\d+(:\d+)?$|@[0-9A-Za-z._-]+$)`, id)
+}
+
+deny contains sprintf("%s: spec.model.pinned is true, so spec.model.id %v must be a versioned model id (date, -vN, or @version), not an alias", [agent_id, model_id]) if {
+	m := object.get(spec, "model", {})
+	object.get(m, "pinned", false) == true
+	object.get(m, "provider", "") != "none"
+	model_id := object.get(m, "id", null)
+	not versioned_model_id(model_id)
+}
+
 deny contains sprintf("%s: spec.runtime.type must be set", [agent_id]) if not runtime.type
 
 deny contains sprintf("%s: k8s runtime needs spec.runtime.namespace", [agent_id]) if {
