@@ -32,6 +32,7 @@ Membrane is a reference. It shows a design and gives working parts that you can 
 
 - Gates control actions, not intent. An agent can do harm inside its permissions. Tiers and approvals reduce this risk. They do not remove it.
 - An agent that can run code can bypass the tool gateway with raw network calls. The network default-deny is the backstop. Do not rely on one layer.
+- **Multi-agent coordination.** Every gate decides for one agent and one call. No gate inspects writes to stores that other agents read, memory that persists between runs, the sequence of calls in a session, or the total size of a swarm. Agents can coordinate through allowed hosts. The work plan is [docs/PATH-TO-MET.md](docs/PATH-TO-MET.md).
 - Vendor SaaS agents (for example Microsoft Copilot or Salesforce Agentforce) run outside your cluster. Membrane cannot put a gate inside them. Use the vendor's admin APIs and audit logs, and require per-action log export in the contract.
 
 ## Custody
