@@ -118,6 +118,14 @@ The gateway validates the selected backend's tool, resource, and arguments befor
 
 Rate limits are enforced in the gateway, not in OPA. A rate-limit rejection is a `deny` with reason `rate_limited`, logged the same way.
 
+The default limiter keeps one sliding 60-second window per agent and tool in one process. For multiple gateway processes on one local filesystem, create a shared store once with `membrane gateway init-rate-state PATH`. Then pass the same absolute `--rate-limit-db PATH` to each `gateway serve` process. Initialization creates a new private SQLite file. It refuses to replace any existing file. Serving never creates or repairs a missing store.
+
+The SQLite limiter takes a write transaction before it expires old entries, counts admitted calls, and reserves a slot. An entry exactly 60 seconds old expires. A lower limit, including throttle, applies to the retained count. Restarting a process does not clear that count. Calls with no quota still check shared-store health. The process-memory limiter remains the default.
+
+A shared-store failure denies with HTTP 403 and reason `policy_error`. It writes the usual live decision record and runs no backend. The gateway does not consume the approval token on this path. Missing, replaced, linked, corrupt, incompatible, or locked state fails closed. A lock wait is at most one second. No path falls back to a process-local budget after a configured shared-store failure.
+
+SQLite uses the host wall clock after it obtains the transaction lock. A clock value earlier than the last stored value denies until the clock catches up. A forward clock jump can expire entries early. Protect the host clock. The adapter is for one trusted local filesystem with SQLite file locks. It does not provide cross-host or NFS coordination, workload identity, or a shared approval service. These records do not attest that every gateway selected the same database.
+
 The gateway adds rules that can only make a decision stricter. A `delegator` that is not null, empty, or white space must be a strict email address (no white space, no control characters, one `@`); otherwise `deny`, `policy_error`. An empty or white space delegator counts as null. An approval token works once. The approver must be a strict email address and a different person from the delegator. The compare uses strip, Unicode NFKC, and casefold on both values. When two calls race for one approval, the loser gets `deny` with reason `approval_consumed`.
 
 ## 4. Decision log payload (`kind: decision`)
@@ -225,6 +233,8 @@ A run with `--allow-nonlive` marks every result `"demo": true` and prints a bann
 | `membrane validate`, `membrane list` | shared |
 | `membrane gen [--check]` | runtime |
 | `membrane gateway serve [--port 8750] [--backend mock\|kb-directory] [--kb-root PATH]` | runtime |
+| `membrane gateway init-rate-state PATH` | runtime. Create new local shared rate state |
+| `membrane gateway serve --rate-limit-db PATH` | runtime. Use existing local shared rate state |
 | `membrane identity issue <agent_id> [--ttl 3600]` | runtime |
 | `membrane approve <approval_id> --approver <email> [--confirm-action-sha256 <hex>]` | runtime |
 | `membrane canary run` | runtime |

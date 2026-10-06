@@ -72,6 +72,8 @@ The demo passes `--allow-nonlive`. It mixes live gateway evidence with fixture c
 | `membrane gen [--check]` | Generate enforcement config. `--check` fails on drift |
 | `membrane gateway serve` | Run the reference tool gateway on 127.0.0.1:8750 with the simulated mock backend |
 | `membrane gateway serve --backend kb-directory --kb-root /path/to/corpus` | Run read-only `kb.search` against real local UTF-8 `.md` and `.txt` files. Writes live execution evidence |
+| `membrane gateway init-rate-state /path/to/rate.sqlite` | Create a new local shared rate store. Refuses to overwrite a file |
+| `membrane gateway serve --rate-limit-db /path/to/rate.sqlite` | Share rate limits across processes on the same trusted local filesystem |
 | `membrane identity issue <agent>` | Print a dev identity token (not SPIFFE) |
 | `membrane approve <approval_id> --approver <email> [--confirm-action-sha256 <hex>]` | Show one pending action (agent, tool, resource, delegator, args, action hash). Sign an approval only with `--confirm-action-sha256` equal to the shown hash |
 | `membrane canary run` | Run the negative tests against the gateway |

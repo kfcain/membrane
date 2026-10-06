@@ -26,10 +26,11 @@ Read in this order:
 | CI policy (conftest), runtime authz (OPA), admission (Kyverno and Rego) | Done. 187 Rego tests, 108 Kyverno rows |
 | Generators and drift check | Done. Network and admission config tested on kind. SPIRE entries remain untested |
 | Reference gateway, approvals, canary, response playbook, kill drill | Done. Dev HMAC identity. Mock default plus bounded live directory backend on `codex/multi-agent-next-steps` |
+| Shared rate state | Optional local SQLite adapter on `codex/multi-agent-next-steps`. Atomic budgets across processes, persistent windows, and fail-closed state errors. M-03 remains PARTIAL for multi-host use |
 | Check engine, OSCAL 1.1.3 output, POA&M candidates, report | Done. OSCAL validates against the vendored NIST schema |
 | Beacon plugins | Done. Check summaries plus exact source JSONL bytes. Local witness sealing, checkpoints, byte recovery, and detection of edits tested |
 | GitHub Actions CI | Green on `main` |
-| Multi-agent controls | IN PROGRESS. `docs/PATH-TO-MET.md` lists 14 items in 4 phases. M-02 has a tested read-only adapter pending merge. Control rows stay at 1 MET, 5 PARTIAL, and 6 NOT MET |
+| Multi-agent controls | IN PROGRESS. `docs/PATH-TO-MET.md` lists 14 items in 4 phases. M-02 has a tested read-only adapter. M-03 has local shared-rate state. Both await merge. Control rows stay at 1 MET, 5 PARTIAL, and 6 NOT MET |
 | Independent cold review | `docs/review/REVIEW-2026-09-27.md`: 26 findings. 26 FIXED, 0 OPEN, 0 WONTFIX. One commit per finding (`Fix R-NN: ...`), each with a test. R-03 has a second commit that restored a green state |
 
 ## 3. Environment setup
@@ -45,6 +46,8 @@ make demo     # end-to-end run; writes out/assessment/
 For the SCF tests, clone `kfcain/beacon` and set `MEMBRANE_SCF_ROWS` to `<beacon>/beacon/scf/objectives/rows.json`. Without it, those tests skip.
 
 For source custody integration tests, install Beacon in the same environment: `python3 -m pip install -e /path/to/beacon`. Set `MEMBRANE_REQUIRE_BEACON_TESTS=1` to fail if Beacon is missing. CI installs Beacon and sets this flag.
+
+Current branch validation: 313 Python tests, 187 Rego tests, 108 Kyverno rows, and the generated-file drift check pass. The 16 shared-rate tests include independent processes, two HTTP gateway instances, restart persistence, failed state, and unused approval after a state failure. CLI checks confirm explicit initialization, refusal to overwrite a store, and refusal to start with missing state.
 
 ## 4. Rules that apply to all work
 

@@ -33,10 +33,13 @@ from ..manifest import DEFAULT_REGISTRY, ManifestError, load_registry
 
 def _serve(args) -> int:
     from .backends import DirectoryKBBackend
+    from .rate_limits import RateLimitStateError
     from .opa import policy_files, PolicyError
     from .server import Gateway, GatewayConfig, make_server
 
     cfg = GatewayConfig()
+    if args.rate_limit_db:
+        cfg.rate_limit_db = Path(args.rate_limit_db)
     backend = None
     try:
         if args.backend == "kb-directory":
@@ -60,12 +63,18 @@ def _serve(args) -> int:
     if not cfg.data_path.exists():
         print(f"WARNING data file missing: {cfg.data_path}. Run `membrane gen`. Every call will deny.",
               file=sys.stderr)
-    srv = make_server(args.host, args.port, Gateway(cfg, backend=backend))
+    try:
+        gateway = Gateway(cfg, backend=backend)
+    except RateLimitStateError as exc:
+        print(f"FAIL {exc}", file=sys.stderr)
+        return 2
+    srv = make_server(args.host, args.port, gateway)
     host, port = srv.server_address[:2]
     print(f"membrane gateway listening on http://{host}:{port}")
     print(f"  policy files: {', '.join(str(f) for f in files) or '(none)'}")
     print(f"  data:         {cfg.data_path}")
     print(f"  backend:      {args.backend}")
+    print(f"  rate state:   {cfg.rate_limit_db or 'process memory'}")
     print(f"  evidence:     {evidence.evidence_dir()}/decision.jsonl, tool_exec.jsonl")
     sys.stdout.flush()
     try:
@@ -92,6 +101,17 @@ def _identity_issue(args) -> int:
         print("FAIL --ttl must be positive", file=sys.stderr)
         return 2
     print(issue_identity(m.id, m.sha256, spiffe_id_for(m, args.trust_domain or DEFAULT_TRUST_DOMAIN), args.ttl))
+    return 0
+
+
+def _init_rate_state(args) -> int:
+    from .rate_limits import RateLimitStateError, SQLiteRateLimiter
+    try:
+        SQLiteRateLimiter(args.path, initialize=True)
+    except RateLimitStateError as exc:
+        print(f"FAIL {exc}. Initialization needs a new path; existing state is not replaced.", file=sys.stderr)
+        return 2
+    print(f"Created shared local rate state: {args.path}")
     return 0
 
 
@@ -130,6 +150,9 @@ def _approve(args) -> int:
 def register(sub) -> None:
     p = sub.add_parser("gateway", help="Reference tool gateway.")
     gsub = p.add_subparsers(dest="gateway_cmd", required=True)
+    init = gsub.add_parser("init-rate-state", help="Create a new shared local SQLite rate store.")
+    init.add_argument("path")
+    init.set_defaults(func=_init_rate_state)
     s = gsub.add_parser("serve", help="Serve POST /v1/tools/call and GET /healthz.")
     s.add_argument("--port", type=int, default=8750)
     s.add_argument("--host", default="127.0.0.1")
@@ -137,6 +160,8 @@ def register(sub) -> None:
     s.add_argument("--data", default=None, help="Default: MEMBRANE_OPA_DATA or out/generated/opa/data.json.")
     s.add_argument("--backend", choices=["mock", "kb-directory"], default="mock")
     s.add_argument("--kb-root", default=None, help="Read-only corpus for the kb-directory backend.")
+    s.add_argument("--rate-limit-db", default=None,
+                   help="SQLite file shared by gateway processes on one local filesystem.")
     s.set_defaults(func=_serve)
 
     p = sub.add_parser("identity", help="Dev identity tokens (not SPIFFE).")
