@@ -114,6 +114,8 @@ Fail-closed defaults in the policy: a missing `requires_delegator` counts as tru
 
 Every POST to `/v1/tools/call` writes exactly one `decision` record. A data document with the wrong shape is a `policy_error` deny. Any other unexpected error before the record gives HTTP 500 and a `deny` record with reason `gateway_error`. An error after the record (for example in the tool backend) gives HTTP 500 and a `deny` response, and writes no second record.
 
+The gateway validates the selected backend's tool, resource, and arguments before it creates or consumes an approval. An unsupported request gives HTTP 403 and `deny` with reason `backend_request_invalid`. No tool runs. The parsed arguments go to the backend without a change. A known execution failure gives HTTP 502, `decision: allow`, and `result.status: error`. The allow records authorization. The error records the failed execution. Neither means that the requested result exists. A failure to write execution evidence gives HTTP 500 and withholds the tool result.
+
 Rate limits are enforced in the gateway, not in OPA. A rate-limit rejection is a `deny` with reason `rate_limited`, logged the same way.
 
 The gateway adds rules that can only make a decision stricter. A `delegator` that is not null, empty, or white space must be a strict email address (no white space, no control characters, one `@`); otherwise `deny`, `policy_error`. An empty or white space delegator counts as null. An approval token works once. The approver must be a strict email address and a different person from the delegator. The compare uses strip, Unicode NFKC, and casefold on both values. When two calls race for one approval, the loser gets `deny` with reason `approval_consumed`.
@@ -156,7 +158,17 @@ Every record has the envelope in `schema/evidence-record.v1.schema.json`: `schem
 
 Pending approval (state file `<state>/approvals/<id>.json`, not evidence): `{approval_id, action_sha256, agent_id, tool, resource, args, delegator, decision_id, trace_id, requested_at, status}`. `membrane approve` prints agent, tool, resource, delegator, args (canonical JSON), and `action_sha256`. It signs nothing unless `--confirm-action-sha256` equals the stored hash. It also refuses when the stored action no longer hashes to the stored `action_sha256`.
 
-`tool_exec`: `{exec_id, decision_id, agent_id, tool, resource, action_sha256, irreversible, approval_id, executed_at, result: "ok|error"}`. The tool backend writes it. A `tool_exec` with no matching `allow` decision is a finding. The reference backend is a mock, so it writes mode `simulated`. A real backend writes mode `live`.
+`tool_exec`: `{exec_id, decision_id, agent_id, tool, resource, action_sha256, irreversible, approval_id, executed_at, result: "ok|error"}`. The tool backend writes it. A `tool_exec` with no matching `allow` decision is a finding. The default mock writes mode `simulated`. The directory backend writes mode `live` with source `membrane.gateway.kb_directory` and `backend_id: kb-directory-v1`.
+
+Directory backend contract:
+
+- Select it with `membrane gateway serve --backend kb-directory --kb-root /absolute/corpus/path`. The root must exist. No path component can be a symlink. The backend pins the root device and inode at startup. The default `--backend mock` does not accept `--kb-root`.
+- The only action is `kb.search` with resource `kb.public-internal` and `irreversible: false`. Arguments are `query` (1 to 256 characters, not only white space) and optional `limit` (integer 1 to 20, default 5). Extra keys are rejected. Resource names never become file paths. The backend verifies the action hash again before it reads a file.
+- Search reads only top-level `.md` and `.txt` documents as UTF-8. Search is literal and case-insensitive. It has no network, shell, recursion, or write operation. The operator supplies the corpus. All agents allowed this tool can read this one resource. Per-agent data-scope enforcement remains separate work.
+- Bounds are 512 directory entries, 128 documents, 256 KiB per document, and 2 MiB of document bytes per call. Each excerpt has at most 1024 characters. Even when the match limit is reached, the backend checks the whole selected corpus. An empty or invalid corpus fails the call and returns no partial output.
+- A success returns `{status: "ok", exec_id, output: {matches, scanned_files, truncated, corpus_sha256}}`. Each match has `document`, `sha256` of its raw bytes, and `excerpt`. `truncated` means more documents matched than the requested limit. Excerpts are untrusted document text.
+- `corpus_sha256` hashes the canonical JSON list of `{document, sha256}` for all scanned documents, sorted by name. A success record adds this hash, `scanned_files`, and `output_sha256` over the exact canonical JSON output. It contains no excerpts. A read failure adds `result: error` and `error: kb_read_failed`, with no output hash. A live error record records an attempt, not success.
+- AGT-AU-01 counts live directory execution records without `--allow-nonlive`. It checks authorization linkage, not successful reads, document truth, or workload identity.
 
 `canary`: `{run_id, probes: [{probe, expected, observed, reasons, pass}], all_pass, not_run: [{probe, reason}]}`. `expected` is `"<decision>"` or `"<decision>/<reason>"`. `observed` is `"<decision>"` or `"<decision>/<reason>,<reason>"`. AGT-TST-01 recomputes each probe result from these two fields and does not trust `pass` alone.
 
@@ -212,7 +224,7 @@ A run with `--allow-nonlive` marks every result `"demo": true` and prints a bann
 | --- | --- |
 | `membrane validate`, `membrane list` | shared |
 | `membrane gen [--check]` | runtime |
-| `membrane gateway serve [--port 8750]` | runtime |
+| `membrane gateway serve [--port 8750] [--backend mock\|kb-directory] [--kb-root PATH]` | runtime |
 | `membrane identity issue <agent_id> [--ttl 3600]` | runtime |
 | `membrane approve <approval_id> --approver <email> [--confirm-action-sha256 <hex>]` | runtime |
 | `membrane canary run` | runtime |

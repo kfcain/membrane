@@ -1,6 +1,6 @@
 # Path to MET: multi-agent controls
 
-Last update: 2026-10-05. Owner: kfcain. State: PLANNED. No item has started.
+Last update: 2026-10-06. Owner: kfcain. State: IN PROGRESS. M-02 has a tested read-only adapter on `codex/multi-agent-next-steps`. Other items remain PLANNED.
 
 This file is the work plan for the multi-agent gaps. The research behind it is in [research/rogue-agent-field-notes.md](research/rogue-agent-field-notes.md). Read the sections "Governance implications" and "Path to MET" there for the reasons. This file gives the work items, the files they touch, and the test for "done".
 
@@ -57,6 +57,11 @@ Same as HANDOFF item 2. Replace the dev HMAC identity with X.509 SVIDs over mTLS
 #### M-02. Real tool backend
 
 Same as HANDOFF item 3. Add an adapter that runs real tools and writes `tool_exec` records with mode `live`.
+
+- **State:** IMPLEMENTED, pending review and merge. Owner: Codex. Branch: `codex/multi-agent-next-steps`.
+- **Scope:** `kb-directory` runs bounded, read-only `kb.search` against an operator-selected local corpus. It binds the action, output, and corpus hashes to live execution evidence. The mock remains the default.
+- **Verification:** `tests/test_real_backend.py` covers HTTP authorization, approval replay, corpus bounds, filesystem failures, evidence failure, and AGT-AU-01 PASS without `--allow-nonlive`.
+- **Remaining:** Store writes and memory adapters for M-04 and M-06. Dev identity and claimed approver identity remain limits. This prerequisite does not change any multi-agent control row to MET.
 
 - **Unblocks:** M-04, M-06, M-08. Stores and memory must go through the gateway, or the gateway cannot see writes.
 - **Done when:** a `tool_exec` record with mode `live` counts without `--allow-nonlive`.

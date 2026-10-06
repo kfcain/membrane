@@ -14,8 +14,8 @@ What it does NOT prove:
 - The dev HMAC identity token is not SPIFFE. It does not prove workload
   attestation, mTLS, or key isolation. Anyone who can read
   var/state/dev-identity.key can mint any identity.
-- The tool backend is a mock. It executes nothing. Its `tool_exec` records
-  use mode "simulated".
+- The default tool backend is a mock. Its `tool_exec` records use mode
+  "simulated". The optional directory backend reads real files with mode "live".
 - The gateway proves mediation only for calls that pass through it. It does
   not prove that an agent has no other network path to a tool. Egress policy
   (membrane gen) and cluster evidence cover that.
@@ -32,10 +32,22 @@ from ..manifest import DEFAULT_REGISTRY, ManifestError, load_registry
 
 
 def _serve(args) -> int:
+    from .backends import DirectoryKBBackend
     from .opa import policy_files, PolicyError
     from .server import Gateway, GatewayConfig, make_server
 
     cfg = GatewayConfig()
+    backend = None
+    try:
+        if args.backend == "kb-directory":
+            if not args.kb_root:
+                raise ValueError("--backend kb-directory requires --kb-root")
+            backend = DirectoryKBBackend(args.kb_root)
+        elif args.kb_root:
+            raise ValueError("--kb-root requires --backend kb-directory")
+    except ValueError as exc:
+        print(f"FAIL {exc}", file=sys.stderr)
+        return 2
     if args.policy_dir:
         cfg.policy_dir = Path(args.policy_dir)
     if args.data:
@@ -48,11 +60,12 @@ def _serve(args) -> int:
     if not cfg.data_path.exists():
         print(f"WARNING data file missing: {cfg.data_path}. Run `membrane gen`. Every call will deny.",
               file=sys.stderr)
-    srv = make_server(args.host, args.port, Gateway(cfg))
+    srv = make_server(args.host, args.port, Gateway(cfg, backend=backend))
     host, port = srv.server_address[:2]
     print(f"membrane gateway listening on http://{host}:{port}")
     print(f"  policy files: {', '.join(str(f) for f in files) or '(none)'}")
     print(f"  data:         {cfg.data_path}")
+    print(f"  backend:      {args.backend}")
     print(f"  evidence:     {evidence.evidence_dir()}/decision.jsonl, tool_exec.jsonl")
     sys.stdout.flush()
     try:
@@ -122,6 +135,8 @@ def register(sub) -> None:
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--policy-dir", default=None, help="Default: MEMBRANE_POLICY_DIR or policy/runtime.")
     s.add_argument("--data", default=None, help="Default: MEMBRANE_OPA_DATA or out/generated/opa/data.json.")
+    s.add_argument("--backend", choices=["mock", "kb-directory"], default="mock")
+    s.add_argument("--kb-root", default=None, help="Read-only corpus for the kb-directory backend.")
     s.set_defaults(func=_serve)
 
     p = sub.add_parser("identity", help="Dev identity tokens (not SPIFFE).")
