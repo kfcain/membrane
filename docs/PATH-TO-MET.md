@@ -1,6 +1,6 @@
 # Path to MET: multi-agent controls
 
-Last update: 2026-10-05. Owner: kfcain. State: PLANNED. No item has started.
+Last update: 2026-10-06. Owner: kfcain. State: IN PROGRESS. M-02 has a tested read-only adapter. M-03 has an optional local shared-rate adapter. Both are on `codex/multi-agent-next-steps`. Other items remain PLANNED.
 
 This file is the work plan for the multi-agent gaps. The research behind it is in [research/rogue-agent-field-notes.md](research/rogue-agent-field-notes.md). Read the sections "Governance implications" and "Path to MET" there for the reasons. This file gives the work items, the files they touch, and the test for "done".
 
@@ -58,12 +58,22 @@ Same as HANDOFF item 2. Replace the dev HMAC identity with X.509 SVIDs over mTLS
 
 Same as HANDOFF item 3. Add an adapter that runs real tools and writes `tool_exec` records with mode `live`.
 
+- **State:** IMPLEMENTED, pending review and merge. Owner: Codex. Branch: `codex/multi-agent-next-steps`.
+- **Scope:** `kb-directory` runs bounded, read-only `kb.search` against an operator-selected local corpus. It binds the action, output, and corpus hashes to live execution evidence. The mock remains the default.
+- **Verification:** `tests/test_real_backend.py` covers HTTP authorization, approval replay, corpus bounds, filesystem failures, evidence failure, and AGT-AU-01 PASS without `--allow-nonlive`.
+- **Remaining:** Store writes and memory adapters for M-04 and M-06. Dev identity and claimed approver identity remain limits. This prerequisite does not change any multi-agent control row to MET.
+
 - **Unblocks:** M-04, M-06, M-08. Stores and memory must go through the gateway, or the gateway cannot see writes.
 - **Done when:** a `tool_exec` record with mode `live` counts without `--allow-nonlive`.
 
 #### M-03. Shared gateway state
 
-The gateway keeps rate-limit counters in one process (`membrane/gateway/state.py`). Move counters to a store that all gateway replicas share. Fail closed: if the store is down, deny with `policy_error`.
+The default gateway keeps rate-limit counters in one process (`membrane/gateway/server.py`). Move counters to a store that all gateway replicas share. Fail closed: if the store is down, deny with `policy_error`.
+
+- **State:** PARTIAL, pending review and merge. Owner: Codex. Branch: `codex/multi-agent-next-steps`.
+- **Scope:** `membrane/gateway/rate_limits.py` adds an optional SQLite store for gateway processes on one trusted local filesystem. Initialize it explicitly, then select the same file in each process. No restart or runtime failure creates a replacement store.
+- **Verification:** `tests/test_shared_rate_limits.py` covers independent processes competing for one budget, two HTTP gateways, restart persistence, throttle, window expiry, state failure, and an approval that remains unused after state failure. Decisions retain live mode and the existing denial reasons.
+- **Remaining:** Cross-host coordination, deployment checks for one common store, and multi-replica approval and identity state. This local adapter does not change any multi-agent control row to MET.
 
 - **Unblocks:** M-08, M-12.
 - **Done when:** two gateway replicas enforce one rate limit together in a test.

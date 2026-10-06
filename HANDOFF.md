@@ -2,7 +2,7 @@
 
 This file lets any capable coding model or engineer continue work on membrane without the original conversation. Read it first. Then read the files it names. Do not rely on memory of earlier sessions.
 
-Last update: 2026-10-05. Owner: kfcain.
+Last update: 2026-10-06. Owner: kfcain.
 
 ## 1. What membrane is
 
@@ -25,11 +25,12 @@ Read in this order:
 | Manifest schema and example registry (5 agents) | Done |
 | CI policy (conftest), runtime authz (OPA), admission (Kyverno and Rego) | Done. 187 Rego tests, 108 Kyverno rows |
 | Generators and drift check | Done. Network and admission config tested on kind. SPIRE entries remain untested |
-| Reference gateway, approvals, canary, response playbook, kill drill | Done. Dev HMAC identity, mock tool backend |
+| Reference gateway, approvals, canary, response playbook, kill drill | Done. Dev HMAC identity. Mock default plus bounded live directory backend on `codex/multi-agent-next-steps` |
+| Shared rate state | Optional local SQLite adapter on `codex/multi-agent-next-steps`. Atomic budgets across processes, persistent windows, and fail-closed state errors. M-03 remains PARTIAL for multi-host use |
 | Check engine, OSCAL 1.1.3 output, POA&M candidates, report | Done. OSCAL validates against the vendored NIST schema |
 | Beacon plugins | Done. Check summaries plus exact source JSONL bytes. Local witness sealing, checkpoints, byte recovery, and detection of edits tested |
 | GitHub Actions CI | Green on `main` |
-| Multi-agent controls | PLANNED. `docs/PATH-TO-MET.md` lists 14 items in 4 phases. None has started. Today 1 row is MET, 5 are PARTIAL, and 6 are NOT MET |
+| Multi-agent controls | IN PROGRESS. `docs/PATH-TO-MET.md` lists 14 items in 4 phases. M-02 has a tested read-only adapter. M-03 has local shared-rate state. Both await merge. Control rows stay at 1 MET, 5 PARTIAL, and 6 NOT MET |
 | Independent cold review | `docs/review/REVIEW-2026-09-27.md`: 26 findings. 26 FIXED, 0 OPEN, 0 WONTFIX. One commit per finding (`Fix R-NN: ...`), each with a test. R-03 has a second commit that restored a green state |
 
 ## 3. Environment setup
@@ -45,6 +46,8 @@ make demo     # end-to-end run; writes out/assessment/
 For the SCF tests, clone `kfcain/beacon` and set `MEMBRANE_SCF_ROWS` to `<beacon>/beacon/scf/objectives/rows.json`. Without it, those tests skip.
 
 For source custody integration tests, install Beacon in the same environment: `python3 -m pip install -e /path/to/beacon`. Set `MEMBRANE_REQUIRE_BEACON_TESTS=1` to fail if Beacon is missing. CI installs Beacon and sets this flag.
+
+Current branch validation: 313 Python tests, 187 Rego tests, 108 Kyverno rows, and the generated-file drift check pass. The 16 shared-rate tests include independent processes, two HTTP gateway instances, restart persistence, failed state, and unused approval after a state failure. CLI checks confirm explicit initialization, refusal to overwrite a store, and refusal to start with missing state.
 
 ## 4. Rules that apply to all work
 
@@ -79,9 +82,9 @@ Two agents work in parallel. Each one owns its files. Do not edit files that the
 | --- | --- | --- | --- | --- |
 | 4. Source evidence custody | **Codex** | `codex/source-evidence-custody` (merged) | `integrations/beacon/`, `membrane/evidence.py` (sealing hooks only), custody tests, `LIMITS.md` custody section, `docs/CONTRACTS.md` custody text | DONE. PR #1, merge `d95b6a0ff889dbcb84d6e2a9b703caa4acddf02a`. GitHub CI run 36425955426 passed. Local `make test`: 260 Python tests, 187 Rego tests, 108 Kyverno rows, drift check OK. The 31 custody tests include the actual Beacon witness path. |
 | 1. Live cluster validation | **Claude** | `claude/live-cluster` (merged) | `.github/workflows/live-cluster.yml`, `scripts/live/`, `tests/live/`, `LIMITS.md` cluster lines, this table | DONE. 17 of 17 live probes pass on kind + Cilium 1.17.4 + Kyverno (GitHub run 36387979570). Runs on GitHub-hosted runners only, because neither sandbox can pull the kind node image. It found one real defect: Cilium must answer `nameError` (see LIMITS.md). |
-| 3. Real tool backend | Unassigned | | | Next after items 1 and 4 |
+| 3. Real tool backend | **Codex** | `codex/multi-agent-next-steps` | `membrane/gateway/`, `tests/test_real_backend.py`, backend contract and limits | IMPLEMENTED, pending review and merge. Read-only local `kb.search` writes live evidence. AGT-AU-01 counts it without the nonlive flag. Local `make test`: 297 Python tests, 187 Rego tests, 108 Kyverno rows, drift check OK. `make demo` passed. Store and memory writes remain open. |
 | 2. SPIFFE identity | Unassigned | | | Can reuse the item 1 kind cluster. It is M-01 in `docs/PATH-TO-MET.md`, so it now blocks multi-agent work |
-| 5. Multi-agent controls (M-01 to M-14) | Unassigned | | Per item in `docs/PATH-TO-MET.md` section 4 | PLANNED. Items 2 and 3 above are M-01 and M-02 |
+| 5. Multi-agent controls (M-01 to M-14) | Per item | | Per item in `docs/PATH-TO-MET.md` section 4 | IN PROGRESS. Items 2 and 3 above are M-01 and M-02 |
 
 Rules for this split:
 

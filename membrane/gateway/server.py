@@ -25,7 +25,9 @@ from pathlib import Path
 
 from .. import evidence
 from . import approvals
+from .backends import BackendRequestError, ToolBackend
 from .opa import PolicyError, default_data_path, default_policy_dir, evaluate, snapshot
+from .rate_limits import RateLimitStateError, SQLiteRateLimiter
 from .state import read_overrides
 from .tokens import TokenError, action_sha256, decode_unverified, verify_identity
 
@@ -50,6 +52,7 @@ class GatewayConfig:
     data_path: Path = field(default_factory=default_data_path)
     opa_bin: str | None = None
     opa_url: str | None = None
+    rate_limit_db: Path | None = None
 
 
 class RateLimiter:
@@ -79,7 +82,10 @@ class MockToolBackend:
     Records use mode "simulated" because no real system took the action.
     """
 
-    def execute(self, *, decision_id: str, agent_id: str, tool: str, resource, action_hash: str,
+    def validate_request(self, *, tool: str, resource, args: dict, irreversible) -> None:
+        pass
+
+    def execute(self, *, decision_id: str, agent_id: str, tool: str, resource, args: dict, action_hash: str,
                 irreversible, approval_id, trace_id: str) -> dict:
         exec_id = str(uuid.uuid4())
         payload = {"exec_id": exec_id, "decision_id": decision_id, "agent_id": agent_id, "tool": tool,
@@ -90,10 +96,11 @@ class MockToolBackend:
 
 
 class Gateway:
-    def __init__(self, config: GatewayConfig | None = None, backend: MockToolBackend | None = None) -> None:
+    def __init__(self, config: GatewayConfig | None = None, backend: ToolBackend | None = None) -> None:
         self.config = config or GatewayConfig()
         self.backend = backend or MockToolBackend()
-        self.limiter = RateLimiter()
+        self.limiter = (SQLiteRateLimiter(self.config.rate_limit_db)
+                        if self.config.rate_limit_db is not None else RateLimiter())
         self._tls = threading.local()
 
     # The whole request path. Returns (http status, response body).
@@ -201,14 +208,26 @@ class Gateway:
 
         decision, reasons = result["decision"], result["reasons"]
 
+        # Validate backend scope before issuing or consuming an approval. This never runs a tool.
+        if decision in {"allow", "require_approval"}:
+            try:
+                self.backend.validate_request(tool=tool, resource=resource, args=args,
+                                              irreversible=rec["irreversible"])
+            except BackendRequestError:
+                decision, reasons = "deny", ["backend_request_invalid"]
+
         # 5. Gateway rate limit. It only tightens an allow.
         if decision == "allow":
             limit = tool_def.get("rate_limit_per_min") if isinstance(tool_def, dict) else None
             entry = overrides.get(agent_id or "")
             if isinstance(entry, dict) and entry.get("mode") == "throttled" and limit:
                 limit = max(1, int(limit) // 2)
-            if not self.limiter.admit(agent_id or "", tool, limit):
-                decision, reasons = "deny", ["rate_limited"]
+            try:
+                if not self.limiter.admit(agent_id or "", tool, limit):
+                    decision, reasons = "deny", ["rate_limited"]
+            except RateLimitStateError:
+                return self._finish(403, "deny", ["policy_error"], rec, decision_id, trace_id, t0,
+                                    detail="shared rate limit state failed")
 
         # 6. Single use approval. It only tightens an allow.
         if decision == "allow" and approval_obj and approval_obj.get("verified"):
@@ -228,8 +247,10 @@ class Gateway:
         status, body_out = self._finish(200, decision, reasons, rec, decision_id, trace_id, t0)
         body_out["result"] = self.backend.execute(
             decision_id=decision_id, agent_id=agent_id or "", tool=tool, resource=resource,
-            action_hash=act_hash, irreversible=rec["irreversible"],
+            args=args, action_hash=act_hash, irreversible=rec["irreversible"],
             approval_id=rec["approval_id"] if approval_obj else None, trace_id=trace_id)
+        if body_out["result"]["status"] != "ok":
+            status = 502
         return status, body_out
 
     def _finish(self, status: int, decision: str, reasons: list[str], rec: dict, decision_id: str,
